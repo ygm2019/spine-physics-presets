@@ -1,0 +1,57 @@
+{
+  "name": "spine-physics-presets",
+  "version": "1.3.1",
+  "private": true,
+  "description": "Standalone Spine 4.2/4.3 physics constraint preset editor",
+  "author": "Yugongmang",
+  "main": "src/desktop/main.cjs",
+  "scripts": {
+    "start": "electron .",
+    "check": "node scripts/check.cjs",
+    "test": "node --test tests/*.test.cjs",
+    "test:desktop": "node scripts/smoke.cjs",
+    "test:constraints": "node scripts/constraint-smoke.cjs",
+    "test:damping": "node scripts/damping-smoke.cjs",
+    "test:presets": "node scripts/preset-roundtrip-smoke.cjs",
+    "test:preset-library": "node scripts/preset-library-smoke.cjs",
+    "test:scale": "node scripts/scale-smoke.cjs",
+    "test:save": "node scripts/project-save-smoke.cjs",
+    "test:import-race": "node scripts/import-save-race-smoke.cjs",
+    "test:workflow": "node scripts/workflow-smoke.cjs",
+    "test:chain-selection": "node scripts/chain-selection-smoke.cjs",
+    "test:default-presets": "node scripts/default-presets-smoke.cjs",
+    "test:help": "node scripts/help-smoke.cjs",
+    "dist": "npm run check && npm test && electron-builder --win nsis --x64"
+  },
+  "devDependencies": {
+    "electron": "44.6.0",
+    "electron-builder": "26.15.3",
+    "playwright-core": "1.63.0"
+  },
+  "build": {
+    "appId": "local.yugongmang.spinephysics",
+    "productName": "Spine Physics Presets",
+    "artifactName": "Spine-Physics-Presets-Setup-${version}.${ext}",
+    "directories": { "output": "dist", "buildResources": "build" },
+    "files": ["src/**/*", "LICENSES/**/*", "package.json"],
+    "asar": true,
+    "compression": "maximum",
+    "win": {
+      "target": [{ "target": "nsis", "arch": ["x64"] }],
+      "icon": "build/icon.ico",
+      "signAndEditExecutable": true
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "perMachine": false,
+      "allowElevation": false,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Spine Physics Presets",
+      "runAfterFinish": true,
+      "deleteAppDataOnUninstall": false,
+      "installerLanguages": ["zh_CN", "en_US"]
+    }
+  }
+}

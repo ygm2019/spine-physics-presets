@@ -1,0 +1,6 @@
+{
+ "source": "@esotericsoftware/spine-webgl",
+ "versions": {"4.2": "4.2.120", "4.3": "4.3.13"},
+ "files": ["spine-webgl-4.2.min.js", "spine-webgl-4.3.min.js"],
+ "license": "LICENSE-spine-runtimes.txt"
+}

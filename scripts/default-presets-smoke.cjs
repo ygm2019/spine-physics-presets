@@ -1,0 +1,56 @@
+'use strict';
+const { _electron: electron } = require('playwright-core');
+const assert = require('node:assert/strict');
+const fs = require('node:fs/promises');
+const path = require('node:path');
+const root = path.resolve(__dirname, '..');
+const defaults = require('../src/renderer/default-presets.js');
+const packaged = process.argv[2];
+const output = path.resolve(process.env.SPINE_TEST_OUTPUT || path.join(root, '.defaults-output'));
+const report = { mode: packaged ? 'packaged-exe' : 'development', checks: [], errors: [], passed: false };
+let app;
+async function main() {
+  await fs.mkdir(output, { recursive: true });
+  const profile = await fs.mkdtemp(path.join(output, 'profile-'));
+  const env = { ...process.env, SPINE_PHYSICS_TEST: '1', SPINE_PHYSICS_TEST_DATA: profile };
+  delete env.ELECTRON_RUN_AS_NODE;
+  app = await electron.launch({ executablePath: packaged || require('electron'), args: packaged ? [] : [root], env, timeout: 60000 });
+  const page = await app.firstWindow();
+  page.on('pageerror', e => report.errors.push(e.message));
+  await page.waitForFunction(() => window.__spineTool && window.desktop);
+  const names = () => page.locator('#presetList .preset-btn').evaluateAll(items => items.map(b => b.dataset.presetName));
+  const key = 'spineRigTools.physicsPresets.v1';
+  assert.deepEqual(await names(), defaults.presets.map(p => p.name));
+  assert.equal(await page.evaluate(key => localStorage.getItem(key), key), null);
+  const exportPath = path.join(output, 'default-export.json');
+  await app.evaluate(({ dialog }, filePath) => { dialog.showSaveDialog = async () => ({ canceled: false, filePath }); }, exportPath);
+  await page.locator('#exportPresets').click();
+  await page.waitForFunction(() => document.querySelector('#toast').textContent.includes('已保存 JSON'));
+  assert.deepEqual(JSON.parse(await fs.readFile(exportPath, 'utf8')), defaults);
+  await page.screenshot({ path: path.join(output, 'default-presets.png') });
+  report.checks.push('fresh profile shows embedded names and exports exact default values through native IPC');
+
+  const userPresets = [{ name: '用户已有预设', values: { wind: -123, mix: 1.8, custom: 'keep' } }];
+  await page.evaluate(({ key, items }) => localStorage.setItem(key, JSON.stringify(items)), { key, items: userPresets });
+  await page.reload();
+  await page.waitForFunction(() => window.__spineTool);
+  assert.deepEqual(await names(), userPresets.map(p => p.name));
+  assert.deepEqual(await page.evaluate(key => JSON.parse(localStorage.getItem(key)), key), userPresets);
+  report.checks.push('existing user preset values and ordering survive loading the new defaults');
+  await page.locator('#resetPresets').click();
+  await page.locator('dialog .primary').click();
+  assert.deepEqual(await names(), defaults.presets.map(p => p.name));
+  assert.deepEqual(await page.evaluate(key => JSON.parse(localStorage.getItem(key)), key), defaults.presets);
+  await page.reload();
+  await page.waitForFunction(() => window.__spineTool);
+  assert.deepEqual(await names(), defaults.presets.map(p => p.name));
+  assert.deepEqual(report.errors, []);
+  report.checks.push('explicit restore-defaults uses the embedded desktop library and persists it across reload');
+  report.passed = true;
+}
+main().catch(error => { report.failure = error.stack; process.exitCode = 1; }).finally(async () => {
+  await fs.mkdir(output, { recursive: true });
+  await fs.writeFile(path.join(output, 'default-presets-report.json'), JSON.stringify(report, null, 2));
+  console.log(JSON.stringify(report, null, 2));
+  if (app) await app.close().catch(() => {});
+});

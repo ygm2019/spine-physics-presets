@@ -1,0 +1,82 @@
+{
+ "skeleton": {
+  "spine": "4.2.120",
+  "x": 0,
+  "y": 0,
+  "width": 200,
+  "height": 200
+ },
+ "bones": [
+  {
+   "name": "root",
+   "length": 20
+  },
+  {
+   "name": "body",
+   "parent": "root",
+   "y": 30,
+   "length": 80
+  },
+  {
+   "name": "head",
+   "parent": "body",
+   "y": 80,
+   "length": 40
+  }
+ ],
+ "slots": [
+  {
+   "name": "body_slot",
+   "bone": "body",
+   "attachment": "body_img"
+  },
+  {
+   "name": "head_slot",
+   "bone": "head",
+   "attachment": "head_img"
+  }
+ ],
+ "skins": [
+  {
+   "name": "default",
+   "attachments": {
+    "body_slot": {
+     "body_img": {
+      "path": "body_img",
+      "width": 64,
+      "height": 64,
+      "y": 40
+     }
+    },
+    "head_slot": {
+     "head_img": {
+      "path": "head_img",
+      "width": 64,
+      "height": 64,
+      "y": 20
+     }
+    }
+   }
+  }
+ ],
+ "physics": [
+  {
+   "name": "head_physics",
+   "bone": "head",
+   "x": 0.12,
+   "y": 0.08,
+   "rotate": 0.78,
+   "scaleX": 0.12,
+   "shearX": 0,
+   "limit": 5000,
+   "fps": 60,
+   "inertia": 0.88,
+   "strength": 8,
+   "damping": 0.82,
+   "mass": 0.7,
+   "wind": 1.5,
+   "gravity": 0,
+   "mix": 1
+  }
+ ]
+}

@@ -1,0 +1,97 @@
+'use strict';
+const { _electron: electron } = require('playwright-core');
+const assert = require('node:assert/strict');
+const fs = require('node:fs/promises');
+const path = require('node:path');
+const guide = require('../src/renderer/usage-guide.js');
+const root = path.resolve(__dirname, '..');
+const output = path.resolve(process.env.SPINE_TEST_OUTPUT || path.join(root, '.help-output'));
+const report = { mode: 'development', checks: [], errors: [], passed: false };
+let app;
+async function main() {
+  await fs.mkdir(output, { recursive: true });
+  const work = await fs.mkdtemp(path.join(output, 'help-'));
+  const env = { ...process.env, SPINE_PHYSICS_TEST: '1', SPINE_PHYSICS_TEST_DATA: path.join(work, 'profile') };
+  delete env.ELECTRON_RUN_AS_NODE;
+  app = await electron.launch({ executablePath: require('electron'), args: [root], env, timeout: 60000 });
+  const page = await app.firstWindow();
+  page.on('pageerror', error => report.errors.push(error.message));
+  await page.waitForFunction(() => window.__spineTool && window.desktop);
+  const modal = page.locator('#usageHelp'), content = modal.locator('.usage-content');
+  for (const [width, height] of [[1060, 650], [1440, 900]]) {
+    await app.evaluate(({ BrowserWindow }, bounds) => { const w = BrowserWindow.getAllWindows()[0]; w.unmaximize(); w.setBounds(bounds); }, { width, height });
+    await page.locator('#helpBtn').click();
+    await modal.waitFor({ state: 'visible' });
+    assert.deepEqual(await modal.locator('h3').allTextContents(), guide.map(section => section.title));
+    assert.deepEqual(await modal.locator('ol li').allTextContents(), guide[0].items);
+    assert.deepEqual(await modal.locator('table tbody tr').allTextContents(), guide.flatMap(section => (section.rows || []).map(row => row.join(''))));
+    const layout = await modal.evaluate(el => {
+      const c = el.querySelector('.usage-content'), b = el.querySelector('.primary');
+      const m = el.getBoundingClientRect(), r = c.getBoundingClientRect(), a = b.getBoundingClientRect();
+      return { bounded: m.left >= 0 && m.top >= 0 && m.right <= innerWidth && m.bottom <= innerHeight, horizontal: c.scrollWidth - c.clientWidth, vertical: c.scrollHeight > c.clientHeight, buttonClear: a.top >= r.bottom && a.bottom <= m.bottom, overflow: [...c.querySelectorAll('td,th,li')].filter(x => x.scrollWidth > x.clientWidth + 2).length };
+    });
+    assert.equal(layout.bounded, true, JSON.stringify(layout));
+    assert(layout.horizontal <= 2, JSON.stringify(layout));
+    assert.equal(layout.vertical, true);
+    assert.equal(layout.buttonClear, true);
+    assert.equal(layout.overflow, 0);
+    await page.screenshot({ path: path.join(output, `help-${width}-top.png`) });
+    await content.focus();
+    await page.keyboard.press('PageDown');
+    await page.waitForFunction(() => document.querySelector('#usageHelp .usage-content').scrollTop > 0);
+    await modal.locator('h3').nth(1).evaluate(el => el.scrollIntoView({ block: 'start' }));
+    await page.screenshot({ path: path.join(output, `help-${width}-keys.png`) });
+    await content.evaluate(el => { el.scrollTop = el.scrollHeight; });
+    await page.screenshot({ path: path.join(output, `help-${width}-bottom.png`) });
+    await page.keyboard.press('Escape');
+    assert.equal(await page.locator('dialog[open]').count(), 0);
+    await page.locator('#helpBtn').click();
+    await page.locator('#usageHelp .primary').click();
+    assert.equal(await page.locator('dialog[open]').count(), 0);
+    report.checks.push(`${width}x${height} complete guide renders without overflow; keyboard scrolling, Esc and confirm work; actions stay visible`);
+  }
+  for (const minor of [2, 3]) {
+    const file = path.join(work, `help-4${minor}.json`), original = await fs.readFile(path.join(root, `tests/fixtures/demo-4${minor}.json`), 'utf8');
+    await fs.writeFile(file, original);
+    await app.evaluate(({ dialog }, file) => { global.__helpFiles = 0; dialog.showOpenDialog = async () => { global.__helpFiles++; return { canceled: false, filePaths: [file] }; }; dialog.showSaveDialog = async () => { global.__helpFiles++; return { canceled: true }; }; }, file);
+    await page.locator('#dropbox').click();
+    await page.waitForFunction(minor => window.__spineTool.runtime.active && window.__spineTool.runtime.key === 40 + minor, minor);
+    await page.locator('[data-tree-name="body"]').click();
+    const state = () => page.evaluate(() => { const t = window.__spineTool; return { data: t.getData(), names: [...t.selection.names], history: t.getHistoryState(), save: t.getSaveState() }; });
+    const before = await state(), opens = await app.evaluate(() => global.__helpFiles);
+    await page.locator('#helpBtn').click();
+    await content.focus();
+    for (const key of ['Control+a', 'Control+Shift+a', 'Control+i', 'Control+z', 'Control+y', 'Control+Shift+z', 'Control+Enter', 'Control+s', 'Control+Shift+s', 'Control+o', 'f', 'Delete']) await page.keyboard.press(key);
+    assert.deepEqual(await state(), before, 'Help must block project commands');
+    assert.equal(await app.evaluate(() => global.__helpFiles), opens);
+    await page.keyboard.press('Escape');
+    assert.deepEqual(await state(), before, 'Closing help must not clear selected bones');
+    assert.equal(await fs.readFile(file, 'utf8'), original);
+    report.checks.push(`4.${minor} help blocks project commands and native file dialogs, keeps selection/history/save state and original JSON untouched`);
+  }
+  await page.evaluate(() => { window.__helpResult = null; window.appDialogs.guide([{ title: '<img src=x onerror=alert(1)>', items: ['<script>bad()</script>'], ordered: false }, { title: 'table', columns: ['<img>'], rows: [['<svg onload=alert(1)>']] }]).then(v => { window.__helpResult = v; }); });
+  await modal.waitFor({ state: 'visible' });
+  assert.equal(await modal.locator('script,img,svg').count(), 0);
+  assert.equal(await modal.locator('h3').first().textContent(), '<img src=x onerror=alert(1)>');
+  await page.locator('#usageHelp .primary').click();
+  await page.waitForFunction(() => window.__helpResult === true);
+  await page.evaluate(() => { window.__promptResult = 'pending'; window.appDialogs.prompt('Name', 'sample').then(v => { window.__promptResult = v; }); });
+  await page.locator('dialog input').fill('renamed');
+  await page.keyboard.press('Enter');
+  await page.waitForFunction(() => window.__promptResult === 'renamed');
+  await page.evaluate(() => { window.__confirmResult = null; window.appDialogs.confirm('Confirm').then(v => { window.__confirmResult = v; }); });
+  await page.locator('dialog button').first().click();
+  await page.waitForFunction(() => window.__confirmResult === false);
+  await page.evaluate(() => { window.__alertResult = null; window.appDialogs.alert('Alert body').then(v => { window.__alertResult = v; }); });
+  assert.equal(await page.locator('dialog p').textContent(), 'Alert body');
+  await page.locator('dialog .primary').click();
+  await page.waitForFunction(() => window.__alertResult === true);
+  report.checks.push('guide renders strings safely; prompt Enter, confirm cancellation and ordinary alert retain their original behavior');
+  assert.deepEqual(report.errors, []);
+  report.passed = true;
+}
+main().catch(error => { report.failure = error.stack; process.exitCode = 1; }).finally(async () => {
+  if (app) await app.close().catch(() => {});
+  await fs.writeFile(path.join(output, 'help-report.json'), JSON.stringify(report, null, 2));
+  console.log(JSON.stringify(report, null, 2));
+});
