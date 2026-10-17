@@ -2,13 +2,7 @@
 const fs=require('node:fs/promises'),path=require('node:path'),os=require('node:os');
 const {execFile}=require('node:child_process'),{promisify}=require('node:util');
 const execute=promisify(execFile);
-async function findSpine(){
- const candidates=[process.env.SPINE_CLI,path.join(process.env.ProgramFiles||'C:/Program Files','Spine/Spine.com'),'D:/software/Spine/Spine.com','C:/software/Spine/Spine.com'];
- for(const file of candidates.filter(Boolean)){try{if((await fs.stat(file)).isFile())return file}catch{}}
- // The launcher records its actual installation path in uninstall registry entries.
- try{const {stdout}=await execute('reg.exe',['query','HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall','/s','/f','Spine'],{windowsHide:true});for(const match of stdout.matchAll(/InstallLocation\s+REG_SZ\s+([^\r\n]+)/g)){const file=path.join(match[1].trim(),'Spine.com');try{if((await fs.stat(file)).isFile())return file}catch{}}}catch{}
- throw Error('导入二进制需要已安装并激活的 Spine。未找到 Spine.com，请设置 SPINE_CLI 为其路径，或先在 Spine 导出 JSON。');
-}
+const {findSpine}=require('./spine-discovery.cjs');
 async function convertBinary(file,cli){
  const info=await fs.stat(file);if(!info.isFile()||info.size>256*1024*1024)throw Error('二进制骨架超过 256 MB 导入限制。');
  const bytes=await fs.readFile(file),version=bytes.subarray(0,512).toString('latin1').match(/4\.[23]\.\d+(?:-beta)?/);

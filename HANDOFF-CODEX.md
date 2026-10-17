@@ -1,5 +1,13 @@
 # Spine Physics Presets: Codex Handoff
 
+## Current: 2026-10-17, version 1.4.1
+
+NSIS now includes build/installer.nsh for the environment/dependency page and Windows 10 x64 checks. Basic runtimes are bundled. Optional Spine setup supports browsing the CLI, official download guidance, running a user-selected installer, rechecking and opening the official launcher for activation. Only a successfully installed application saves the chosen CLI to HKCU\\Software\\CreativeTools\\SpinePhysicsPresets (64-bit view), SpineCliPath; canceling setup does not write it. Silent setup automatically discovers a CLI if available. src/desktop/spine-discovery.cjs reads both registry views, environment/PATH, common directories on all drive letters, and user/machine App Paths/uninstall entries. It validates the file exists, not license state. Full Spine download/activation remains in the official flow; Trial does not support export.
+
+The user authorized packaging, making the repository public and publishing a GitHub Release. Only targeted dependency discovery, actual installer checks and installer payload validation are required this time; do not rerun the entire application regression. npm run dist:installer is the scoped build route. No installation over the user's live program and no changes to user presets or the running Spine instance.
+
+The discarded standalone installer-check.exe test helper was detected by Huorong as Trojan/Injector.bfx. Its source generated a dummy CLI in a temporary directory to test discovery; it contained no process injection code. The exact detector trigger is unknown, so do not claim a vendor-confirmed false positive or antivirus clearance. The helper and its generation script are removed, must not be regenerated/restored, and are not part of the product payload. Use Node discovery tests and the real setup wizard instead. Do not disable antivirus or add exclusions. The final installer is unsigned.
+
 ## Current: 2026-10-17, version 1.4.0
 
 The GitHub repository is now the maintenance source. See CHANGELOG.md for all changes since 1.3.1, including earlier local selection, rendering and preset improvements plus parameter auto-apply. Parameter edits patch only changed fields and retain transactional runtime validation, history and autosave. The apply button is removed; Ctrl+Enter flushes pending edits. Use npm run test:auto-parameters for browser regression (Chrome or CHROME_PATH required). Historical source/install paths and draft-only parameter behavior below are superseded. No new NSIS installer is published in this update.

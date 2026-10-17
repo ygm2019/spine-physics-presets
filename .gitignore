@@ -2,6 +2,9 @@ node_modules/
 dist/
 .test-output/
 .release-validation/
+.features-output/
+.binary-output*/
+.installer-test-output/
 work/
 HANDOFF-MESH-CODEX.md
 mesh-analysis/
