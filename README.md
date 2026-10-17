@@ -1,17 +1,20 @@
 # Spine Physics Presets
 
-用于 Spine 4.2 / 4.3 的 Windows 独立物理约束预设编辑工具，当前版本 **1.4.1**。基于 Electron，安装后无需额外安装 Node.js 或浏览器。
+用于 Spine 4.2 / 4.3 的 Windows 独立物理约束预设编辑工具，当前版本 **1.4.2**。基于 Electron，安装后无需额外安装 Node.js 或浏览器。
 
-## 安装与环境
+## 安装
 
-从 [Releases](https://github.com/ygm2019/spine-physics-presets/releases) 下载 Windows x64 安装包。安装向导保留自选安装目录，并新增“环境与依赖”步骤：
+从 [Releases](https://github.com/ygm2019/spine-physics-presets/releases) 下载 Windows x64 安装包，选择软件安装目录即可。安装过程中自动识别已有的 Spine.com 并保存路径；找到后直接继续，不显示额外配置页。只有自动查找失败时才提示浏览选择 Spine.com。
 
-- 检查 64 位 Windows 10 或更新版本；Electron、Node.js、Chromium 均已包含。
-- 自动寻找 Spine.com，支持各本地盘常用目录、SPINE_CLI、PATH 和用户/系统两种注册表视图；也可以手动浏览指定。
-- 没有 Spine 时，可打开官方安装说明，从自己的许可证页面下载完整版，再点击“运行安装程序…”完成安装，返回后“重新检测”；可点击“打开 Spine 激活”。正式下载及激活使用用户自己的许可证，试用版不支持导出。
-- 只使用 JSON 时可取消“配置二进制导入”，直接继续。检测到文件表示找到了 CLI，不表示已验证许可证或具体编辑器版本；二进制转换时由 Spine 验证并按文件版本加载。
+基础运行组件已包含，无需额外安装 Node.js 或浏览器。安装器只定位已有的 Spine，不下载、安装或激活 Spine。取消安装不会保存路径或修改用户预设。
 
-安装完成才保存手动路径；取消安装不会写入配置。之后二进制导入会使用该路径，失效时自动继续查找。更换 Spine 位置可重新运行安装器配置或设置 SPINE_CLI。官方参考：[安装与激活](https://esotericsoftware.com/spine-getting-started)、[命令行](https://esotericsoftware.com/spine-command-line-interface)。
+新安装包沿用同一应用标识，正常安装的旧版会在原目录升级并保留用户预设。本机旧部署目录 `Programs/CreativeTools/SpinePhysicsPresets` 即使缺少安装注册记录也会被识别；手动指定其他目录时按用户选择安装。
+
+## 软件更新
+
+安装此版本后，启动约 2.5 秒后自动检查本仓库正式 Release。有新版时，右下角“提示与操作记录”中显示可点击的更新提示。点击后下载并显示进度，完成后点击“重启安装”自动升级到当前软件目录。会先保存已绑定的工程；保存失败或仍有未保存修改时阻止重启。
+
+更新仅使用正式版，不下载预发布版或降级；不自动下载、不在普通退出时安装。下载使用 electron-updater 的 SHA512 校验。发布新版本时必须同时上传 EXE、latest.yml 和 blockmap，先上传全部文件再发布 Release。当前安装包未签名。
 
 ## 功能
 
@@ -53,9 +56,11 @@ npm run test:auto-parameters
 npm run dist
 ```
 
-安装包输出到 `dist/Spine-Physics-Presets-Setup-1.4.1.exe`。当前安装包没有商业代码签名证书。安装和卸载不会主动删除已保存的用户预设库。
+安装包输出到 `dist/Spine-Physics-Presets-Setup-1.4.2.exe`。当前安装包没有商业代码签名证书。安装和卸载不会主动删除已保存的用户预设库。
 
 仅验证安装依赖改动并重新打包：`npm run dist:installer`。依赖定位测试：`npm run test:installer`。安装向导以实际安装包检查，不再生成额外的原生测试 EXE。测试目录、临时假 CLI 和测试报告均不属于发布载荷。
+
+更新针对性测试：`npm run test:updates`；打包后的通知与保存保护检查：`node scripts/update-smoke.cjs "dist/win-unpacked/Spine Physics Presets.exe"`。本次仅测试相关改动，未重跑整体回归，也未真实执行覆盖安装。
 
 如需主动更新内置预设，可把符合格式的 `spine-physics-presets1.json` 放在当前用户桌面，再执行 `node scripts/sync-default-presets.cjs`；此步骤不是正常构建的前提。
 

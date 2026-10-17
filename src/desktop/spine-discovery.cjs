@@ -65,6 +65,6 @@ async function findSpine(options = {}) {
       }
     }
   }
-  throw Error('未找到 Spine.com。请重新运行安装包，在“环境与依赖”步骤选择 Spine 路径或安装官方 Spine；也可设置 SPINE_CLI。JSON 导入无需此依赖。二进制转换还需要在 Spine 中完成激活。');
+  throw Error('未找到 Spine.com。请重新运行安装包以识别或选择 Spine.com 路径；也可设置 SPINE_CLI。JSON 导入无需此依赖。二进制转换还需要在 Spine 中完成激活。');
 }
 module.exports = { cliPath, findSpine, SETTINGS_KEY };

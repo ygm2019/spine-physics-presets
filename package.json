@@ -1,6 +1,6 @@
 {
   "name": "spine-physics-presets",
-  "version": "1.4.1",
+  "version": "1.4.2",
   "private": true,
   "description": "Standalone Spine 4.2/4.3 physics constraint preset editor",
   "author": "Yugongmang",
@@ -24,7 +24,8 @@
     "dist": "npm run check && npm test && electron-builder --win nsis --x64",
     "test:auto-parameters": "node scripts/auto-parameters-smoke.cjs",
     "test:installer": "node --test tests/spine-discovery.test.cjs",
-    "dist:installer": "npm run test:installer && electron-builder --win nsis --x64"
+    "dist:installer": "npm run test:installer && electron-builder --win nsis --x64",
+    "test:updates": "node --test tests/updates.test.cjs"
   },
   "devDependencies": {
     "electron": "44.6.0",
@@ -73,6 +74,17 @@
         "zh_CN",
         "en_US"
       ]
-    }
+    },
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "ygm2019",
+        "repo": "spine-physics-presets",
+        "releaseType": "release"
+      }
+    ]
+  },
+  "dependencies": {
+    "electron-updater": "6.8.9"
   }
 }

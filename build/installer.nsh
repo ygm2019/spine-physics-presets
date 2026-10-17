@@ -10,8 +10,6 @@
 !ifndef BUILD_UNINSTALLER
 Var spDialog
 Var spPathEdit
-Var spStatus
-Var spEnable
 Var spFound
 Var spSelected
 Var spCandidate
@@ -27,6 +25,7 @@ Var spPathList
 Var spButton
 
 !macro customInit
+  Call SP_LegacyDirectory
   ${IfNot} ${AtLeastWin10}
     MessageBox MB_ICONSTOP "需要 Windows 10 或更新版本。"
     Quit
@@ -38,8 +37,40 @@ Var spButton
 !macroend
 
 !macro customPageAfterChangeDir
+  !undef MUI_PAGE_CUSTOMFUNCTION_PRE
+  !define MUI_PAGE_CUSTOMFUNCTION_PRE SP_InstallPre
   Page custom SP_DependencyPage SP_DependencyLeave
 !macroend
+
+; The old local deployment has no NSIS registration. Prefer its existing folder
+; only when there is no registered install and the user has not chosen another path.
+!macro customWelcomePage
+  !define MUI_PAGE_CUSTOMFUNCTION_LEAVE SP_LegacyDirectory
+!macroend
+
+Function SP_LegacyDirectory
+  ReadRegStr $spTemp HKCU "Software\${APP_GUID}" "InstallLocation"
+  ${If} $spTemp != ""
+    Return
+  ${EndIf}
+  ReadRegStr $spTemp HKLM "Software\${APP_GUID}" "InstallLocation"
+  ${If} $spTemp != ""
+    Return
+  ${EndIf}
+  ${If} $INSTDIR == "$LOCALAPPDATA\Programs\${APP_FILENAME}"
+    IfFileExists "$LOCALAPPDATA\Programs\CreativeTools\SpinePhysicsPresets\Spine Physics Presets.exe" 0 sp_legacy_done
+    StrCpy $INSTDIR "$LOCALAPPDATA\Programs\CreativeTools\SpinePhysicsPresets"
+  ${EndIf}
+  sp_legacy_done:
+FunctionEnd
+
+Function SP_InstallPre
+  ${If} $INSTDIR == "$LOCALAPPDATA\Programs\CreativeTools\SpinePhysicsPresets"
+    ; Preserve the legacy directory verbatim, without adding a spaced product subfolder.
+    Return
+  ${EndIf}
+  Call instFilesPre
+FunctionEnd
 
 Function SP_CheckCandidate
   ${If} $spFound != ""
@@ -149,130 +180,50 @@ Function SP_FindSpine
   ClearErrors
 FunctionEnd
 
-Function SP_UpdateStatus
-  ${If} $spFound == ""
-    ${NSD_SetText} $spStatus "未找到 Spine.com：仍可安装并使用 JSON 功能。"
-  ${Else}
-    ${NSD_SetText} $spStatus "已找到 Spine.com。首次二进制转换前请在 Spine 中激活。"
-  ${EndIf}
-FunctionEnd
-
-Function SP_Recheck
-  Pop $spButton
-  ; Prefer the currently entered location, then retry automatic discovery.
-  ${NSD_GetText} $spPathEdit $spCandidate
-  StrCpy $spFound ""
-  Call SP_CheckCandidate
-  ${If} $spFound == ""
-    Call SP_FindSpine
-  ${EndIf}
-  ${NSD_SetText} $spPathEdit "$spFound"
-  Call SP_UpdateStatus
-FunctionEnd
-
 Function SP_Browse
   Pop $spButton
-  nsDialogs::SelectFileDialog open "" "Spine CLI (Spine.com)|Spine.com|Spine launcher (Spine.exe)|Spine.exe"
+  nsDialogs::SelectFileDialog open "" "Spine CLI (Spine.com)|Spine.com"
   Pop $spCandidate
   ${If} $spCandidate != ""
     StrCpy $spFound ""
     Call SP_CheckCandidate
     ${NSD_SetText} $spPathEdit "$spFound"
-    Call SP_UpdateStatus
   ${EndIf}
-FunctionEnd
-
-Function SP_Download
-  Pop $spButton
-  ExecShell "open" "https://esotericsoftware.com/spine-getting-started"
-FunctionEnd
-
-Function SP_InstallDependency
-  Pop $spButton
-  nsDialogs::SelectFileDialog open "" "官方 Spine 安装程序 (*.exe)|*.exe"
-  Pop $spTemp
-  ${If} $spTemp != ""
-    ClearErrors
-    ExecShell "open" "$spTemp"
-    ${If} ${Errors}
-      MessageBox MB_ICONEXCLAMATION "无法运行安装程序。请确认文件有效，并允许官方安装程序所需的系统权限。"
-    ${Else}
-      MessageBox MB_ICONINFORMATION "请在打开的 Spine 安装程序中完成安装，然后返回此页点击“重新检测”。"
-    ${EndIf}
-  ${EndIf}
-FunctionEnd
-
-Function SP_Activate
-  Pop $spButton
-  ${NSD_GetText} $spPathEdit $spCandidate
-  StrCpy $spFound ""
-  Call SP_CheckCandidate
-  ${If} $spFound != ""
-    ${GetParent} "$spFound" $spTemp
-    IfFileExists "$spTemp\Spine.exe" 0 sp_activate_missing
-    ExecShell "open" "$spTemp\Spine.exe"
-    Return
-  ${EndIf}
-  sp_activate_missing:
-  MessageBox MB_ICONINFORMATION "请先安装 Spine，或选择有效的 Spine.com 路径。"
 FunctionEnd
 
 Function SP_DependencyPage
-  !insertmacro MUI_HEADER_TEXT "环境与依赖" "检查运行环境，并配置二进制骨架导入所需的 Spine。"
+  Call SP_LegacyDirectory
+  Call SP_FindSpine
+  StrCpy $spSelected "$spFound"
+  ; Normally nothing to confirm: a discovered CLI skips this fallback page.
+  ${If} $spFound != ""
+    Abort
+  ${EndIf}
+  !insertmacro MUI_HEADER_TEXT "选择 Spine 路径" "未自动找到 Spine.com，请指定文件位置。"
   nsDialogs::Create 1018
   Pop $spDialog
   ${If} $spDialog == error
     Abort
   ${EndIf}
-  ${NSD_CreateLabel} 0 0 100% 21u "系统：64 位 Windows 10 或更新版本。运行组件：已包含 Electron / Node.js / Chromium，无需额外下载。"
+  ${NSD_CreateLabel} 0 12u 100% 20u "请选择 Spine 安装目录中的 Spine.com。"
   Pop $spTemp
-  ${NSD_CreateCheckbox} 0 25u 100% 12u "配置二进制导入（.skel / .skel.bytes，需要官方 Spine）"
-  Pop $spEnable
-  ${NSD_CreateLabel} 0 43u 100% 12u "Spine.com 路径："
-  Pop $spTemp
-  ${NSD_CreateText} 0 58u 78% 13u ""
+  ${NSD_CreateText} 0 39u 78% 13u ""
   Pop $spPathEdit
-  ${NSD_CreateButton} 80% 57u 20% 15u "浏览…"
+  ${NSD_CreateButton} 80% 38u 20% 15u "浏览…"
   Pop $spButton
   ${NSD_OnClick} $spButton SP_Browse
-  ${NSD_CreateLabel} 0 77u 100% 19u ""
-  Pop $spStatus
-  ${NSD_CreateButton} 0 99u 24% 16u "官方下载说明"
-  Pop $spButton
-  ${NSD_OnClick} $spButton SP_Download
-  ${NSD_CreateButton} 25% 99u 24% 16u "运行安装程序…"
-  Pop $spButton
-  ${NSD_OnClick} $spButton SP_InstallDependency
-  ${NSD_CreateButton} 50% 99u 24% 16u "重新检测"
-  Pop $spButton
-  ${NSD_OnClick} $spButton SP_Recheck
-  ${NSD_CreateButton} 75% 99u 25% 16u "打开 Spine 激活"
-  Pop $spButton
-  ${NSD_OnClick} $spButton SP_Activate
-  ${NSD_CreateLabel} 0 122u 100% 27u "没有 Spine：可从许可证页面下载完整版，再在此运行安装程序。试用版不支持导出，不能用于二进制转换。激活和首次下载编辑器版本需要联网；JSON 功能可跳过此项。"
-  Pop $spTemp
-  Call SP_FindSpine
-  ${NSD_SetText} $spPathEdit "$spFound"
-  ${If} $spFound != ""
-    ${NSD_Check} $spEnable
-  ${EndIf}
-  Call SP_UpdateStatus
   nsDialogs::Show
 FunctionEnd
 
 Function SP_DependencyLeave
-  StrCpy $spSelected ""
-  ${NSD_GetState} $spEnable $spTemp
-  ${If} $spTemp == ${BST_CHECKED}
-    ${NSD_GetText} $spPathEdit $spCandidate
-    StrCpy $spFound ""
-    Call SP_CheckCandidate
-    ${If} $spFound == ""
-      MessageBox MB_ICONEXCLAMATION "未找到有效的 Spine.com。请先安装、浏览或重新检测；也可以取消勾选，继续安装 JSON 功能。"
-      Abort
-    ${EndIf}
-    StrCpy $spSelected "$spFound"
+  ${NSD_GetText} $spPathEdit $spCandidate
+  StrCpy $spFound ""
+  Call SP_CheckCandidate
+  ${If} $spFound == ""
+    MessageBox MB_ICONEXCLAMATION "请选择有效的 Spine.com 文件。"
+    Abort
   ${EndIf}
+  StrCpy $spSelected "$spFound"
 FunctionEnd
 
 !macro customInstall

@@ -51,6 +51,7 @@
    <div class="bottom-panels"><section class="animation-panel"><div class="activity-head"><strong>动画</strong></div><div id="animationList" role="listbox" aria-label="动画列表"><button class="animation-row selected" data-animation="" role="option" aria-selected="true">装配姿态</button></div><div class="animation-controls"><button id="animationPlay" disabled>播放</button><button id="animationStop" disabled>停止</button><label><input id="animationLoop" type="checkbox" checked>循环</label><select id="animationSpeed" aria-label="播放速度"><option value="0.25">0.25×</option><option value="0.5">0.5×</option><option value="1" selected>1×</option><option value="2">2×</option></select></div><input id="animationTime" type="range" min="0" max="0" step="0.001" value="0" aria-label="动画进度"><span id="animationProgress" class="caption">0.00 / 0.00 秒</span></section><div id="animationDivider" role="separator" aria-label="调整动画与记录宽度" aria-orientation="vertical" tabindex="0"></div><section class="activity-panel" aria-label="提示与操作记录">
     <div class="activity-head"><strong>提示与操作记录</strong><span id="activitySelection">未载入角色</span><div class="history-tools"><button id="undoProject" class="icon-action" disabled title="撤销（Ctrl+Z）" aria-label="撤销"><img src="icons/undo-2.svg" alt=""></button><button id="redoProject" class="icon-action" disabled title="重做（Ctrl+Y / Ctrl+Shift+Z）" aria-label="重做"><img src="icons/redo-2.svg" alt=""></button><button id="clearActivity" class="icon-action" title="清空操作记录，不清空撤销历史" aria-label="清空操作记录"><img src="icons/list-x.svg" alt=""></button></div></div>
     <div class="toast" id="toast" role="status" aria-live="polite"></div>
+    <button id="updateNotice" class="update-notice" type="button" hidden aria-live="polite"></button>
     <ol id="activityLog" class="activity-log" aria-label="操作记录"></ol>
    </section>
    </div><div class="workspace-file-actions" role="toolbar" aria-label="预设库与工程文件操作"><button class="bar-btn" id="importPresets">导入预设库</button><button class="bar-btn" id="exportPresets">导出预设库</button><button class="bar-btn" id="shortcutSettings">快捷键设置</button><button class="bar-btn" id="helpBtn">使用说明</button><span id="saveStatus" class="save-status" role="status" aria-live="polite"></span><button class="bar-btn" id="saveOriginal" disabled>保存原 JSON</button><button class="bar-btn primary" id="exportJson" disabled>另存为 JSON</button></div>
@@ -69,5 +70,6 @@
 <script src="bone-icons.js"></script>
 <script src="app.js"></script>
 <script src="desktop.js"></script>
+<script src="updates.js"></script>
 </body>
 </html>

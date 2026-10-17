@@ -5,6 +5,7 @@ dist/
 .features-output/
 .binary-output*/
 .installer-test-output/
+.update-test-output/
 work/
 HANDOFF-MESH-CODEX.md
 mesh-analysis/

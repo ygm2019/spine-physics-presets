@@ -11,6 +11,7 @@ const pageUrl = pathToFileURL(page).href;
 let window;
 let settingsFile;
 let settings = normalizeWindowSettings({});
+let updates;
 const projectFiles = new ProjectFiles();
 
 if (process.env.SPINE_PHYSICS_TEST_DATA) {
@@ -78,7 +79,19 @@ function createWindow() {
     persistSettings();
   });
   window.loadFile(page);
+  window.webContents.once('did-finish-load', () => {
+    if (!app.isPackaged || process.env.SPINE_PHYSICS_TEST === '1') return;
+    const { autoUpdater } = require('electron-updater');
+    autoUpdater.installDirectory = path.dirname(app.getPath('exe'));
+    updates = require('./updates.cjs').createUpdates(autoUpdater, state => {
+      if (window && !window.isDestroyed()) window.webContents.send('updates:state', state);
+    }, async () => Boolean(await window.webContents.executeJavaScript('window.__spineTool.prepareUpdate()')));
+    setTimeout(() => updates.check(), 2500).unref();
+  });
 }
+
+ipcMain.handle('updates:get', event => { trusted(event); return updates?.snapshot() || { status: 'idle', version: '' }; });
+ipcMain.handle('updates:activate', event => { trusted(event); return updates?.activate() || { status: 'idle', version: '' }; });
 
 ipcMain.handle('app:info', event => {
   trusted(event);

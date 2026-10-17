@@ -1,0 +1,43 @@
+'use strict';
+const { _electron: electron } = require('playwright-core');
+const fs = require('node:fs/promises'), path = require('node:path'), assert = require('node:assert/strict');
+(async () => {
+  const root=path.resolve(__dirname,'..'), output=path.join(root,'.update-test-output');
+  await fs.mkdir(output,{recursive:true});
+  const profile=await fs.mkdtemp(path.join(output,'profile-'));
+  const env={...process.env,SPINE_PHYSICS_TEST:'1',SPINE_PHYSICS_TEST_DATA:profile};delete env.ELECTRON_RUN_AS_NODE;
+  const app=await electron.launch({executablePath:process.argv[2],args:[],env});
+  try {
+    const page=await app.firstWindow(), errors=[];page.on('pageerror',e=>errors.push(e.message));
+    await page.waitForFunction(()=>window.__spineTool&&window.desktop?.getUpdateState);
+    assert.equal(await page.locator('#updateNotice').isHidden(),true);
+    const updater=await app.evaluate(({app})=>({version:app.getVersion(),module:typeof process.mainModule.require('electron-updater').autoUpdater.checkForUpdates}));
+    assert.equal(updater.version,'1.4.2');assert.equal(updater.module,'function');
+    const emit=state=>app.evaluate(({BrowserWindow},value)=>BrowserWindow.getAllWindows()[0].webContents.send('updates:state',value),state);
+    await emit({status:'available',version:'1.4.3',message:''});
+    await page.waitForFunction(()=>document.querySelector('#updateNotice').textContent.includes('1.4.3'));
+    assert.equal(await page.locator('#updateNotice').isEnabled(),true);
+    await emit({status:'downloading',version:'1.4.3',percent:42});
+    await page.waitForFunction(()=>document.querySelector('#updateNotice').textContent.includes('42%'));
+    assert.equal(await page.locator('#updateNotice').isDisabled(),true);
+    await emit({status:'downloaded',version:'1.4.3'});
+    await page.waitForFunction(()=>document.querySelector('#updateNotice').textContent.includes('重启安装'));
+    assert.equal(await page.locator('#updateNotice').isEnabled(),true);
+    assert.equal(await page.evaluate(()=>window.__spineTool.prepareUpdate()),true);
+    const box=await page.locator('#updateNotice').boundingBox(),panel=await page.locator('.activity-panel').boundingBox();
+    assert(box.x>=panel.x&&box.x+box.width<=panel.x+panel.width+1);
+    assert(box.y>=panel.y&&box.y+box.height<=panel.y+panel.height+1);
+    await page.screenshot({path:path.join(output,'update-notice.png')});
+    const fixture=JSON.parse(await fs.readFile(path.join(root,'tests/fixtures/demo-43.json'),'utf8'));
+    await page.evaluate(value=>window.__spineTool.loadSkeleton(value,'unsaved-test.json'),fixture);
+    await page.waitForFunction(()=>window.__spineTool.runtime.active);
+    await page.locator('#expandBones').click();
+    await page.locator('[data-tree-name="body"]').click();
+    await page.locator('#f_strength').fill('73');await page.locator('#f_strength').dispatchEvent('change');
+    await page.waitForFunction(()=>window.__spineTool.getSaveState().revision>0);
+    assert.equal(await page.evaluate(()=>window.__spineTool.prepareUpdate()),false);
+    await app.evaluate(({dialog})=>{dialog.showMessageBoxSync=()=>1;});
+    assert.deepEqual(errors,[]);
+    console.log('Packaged update smoke passed: production updater module, IPC notification, available/download progress/restart states, right-panel bounds, clean and unsaved-project guards. No real download or installation performed.');
+  } finally {await app.close();}
+})().catch(error=>{console.error(error);process.exitCode=1;});

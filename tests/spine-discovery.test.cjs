@@ -39,5 +39,5 @@ test('discovers machine App Paths GUI entry and expands registry environment var
   assert.equal(await findSpine(fixture([file], { env: { TOOLS: 'F:\\Tool Set' }, readRegistry: async key => key.endsWith('App Paths\\Spine.exe') ? '(Default) REG_EXPAND_SZ "%TOOLS%\\Spine.exe"' : '' })), file);
 });
 test('missing CLI reports installation guidance and leaves JSON workflow available', async () => {
-  await assert.rejects(findSpine(fixture()), /环境与依赖.*JSON 导入无需此依赖/);
+  await assert.rejects(findSpine(fixture()), /选择 Spine\.com 路径.*JSON 导入无需此依赖/);
 });

@@ -50,6 +50,12 @@ async function saveOriginal(){
   finally{state.saving=false;if(state===projectSave)renderSaveState()}
  })();return state.task;
 }
+async function prepareUpdate(){
+ flushPhysicsEdits();
+ if(projectSave.source)await saveOriginal();
+ if(projectSave.saving||projectSave.error||projectSave.saved!==projectSave.revision){toast('请先保存当前工程，再重启更新。',true);return false}
+ return true;
+}
 async function prepareProjectImport(){
  flushPhysicsEdits();
  while(true){
@@ -533,5 +539,5 @@ bindAnimationControls();bindSidebarResizers();bindVisibility();bindResizer();bin
 renderHistory();if(!presetLoadError)toast('先载入 Spine JSON。',false,false);
 for(const [id,title] of [['clearSelection','清除骨骼选择（Ctrl+Shift+A）'],['exportJson','另存为 JSON（Ctrl+Shift+S）'],['updateConstraint','完整更新载入的约束']])$('#'+id).title=title;
 /* 调试/自动化校验入口（CDP 驱动用，不影响界面逻辑） */
-window.__spineTool={runtime,selection,getData:()=>data,refreshRuntime,drawRig,loadSkeleton,applyPhysics,valuesFromForm,setForm,toast,handleFiles,importPresetFile,exportJson,saveOriginal,prepareProjectImport,focusSelection,getHistoryState:()=>projectHistory.state(),getSaveState:()=>({source:projectSave.source,revision:projectSave.revision,saved:projectSave.saved,saving:projectSave.saving,error:projectSave.error,backup:projectSave.backup})};
+window.__spineTool={prepareUpdate,runtime,selection,getData:()=>data,refreshRuntime,drawRig,loadSkeleton,applyPhysics,valuesFromForm,setForm,toast,handleFiles,importPresetFile,exportJson,saveOriginal,prepareProjectImport,focusSelection,getHistoryState:()=>projectHistory.state(),getSaveState:()=>({source:projectSave.source,revision:projectSave.revision,saved:projectSave.saved,saving:projectSave.saving,error:projectSave.error,backup:projectSave.backup})};
 })();

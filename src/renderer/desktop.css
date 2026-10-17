@@ -117,3 +117,4 @@
 .animation-row.selected{background:#326780;color:#fff}
 .animation-row:hover{background:#45474b}
 #animationTime{flex:none;width:100%;margin:0}
+.activity-panel>.update-notice{flex:none;text-align:left;margin:4px 7px;padding:6px 9px;color:#f2d679;background:#39372b;border:1px solid #756336;font-size:12px}.activity-panel>.update-notice[hidden]{display:none}.activity-panel>.update-notice:disabled{cursor:default;opacity:.85}
