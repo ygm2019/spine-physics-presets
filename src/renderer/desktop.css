@@ -33,7 +33,8 @@
 .sidebar-bottom .subactions button{font-size:11px;padding:4px 7px;min-width:0}
 .constraint-row .constraint-text{flex:1;min-width:0}
 .constraint-order{font-variant-numeric:tabular-nums;flex:none;color:#c0c1c3;font-size:10px;min-width:20px;text-align:right}
-.constraint-row.selected .constraint-order{color:#dfedf4}
+.constraint-row.selected .constraint-order,.constraint-row.bone-selected .constraint-order{color:#dfedf4}
+.constraint-row.bone-selected,.constraint-row.bone-selected:hover{background:#326780;color:#fff}
 .constraint-row{touch-action:none}
 .constraint-row.drop-before{box-shadow:inset 0 2px #f2c94c}
 .constraint-row.drop-after{box-shadow:inset 0 -2px #f2c94c}

@@ -28,7 +28,7 @@
   <section class="card preview-panel">
    <div class="preview-head"><strong>角色 / 骨骼预览</strong><span class="caption" id="previewHint">官方 Spine 运行时渲染 · 拖框选择 · Ctrl 点击增选/减选</span></div>
 
-   <div class="preview-stage"><div class="preview-input-hint" id="boneSelectionHelp" aria-label="骨骼选择说明"><span>左键选骨骼 · 点击空白取消</span><span>Ctrl + 左键点击：增选 / 减选</span><span>右键拖动：框选</span><span>Ctrl + 左键拖动：追加框选</span></div><canvas id="rigGL" aria-label="Spine 官方运行时预览"></canvas><canvas id="rigCanvas" aria-label="Spine 骨骼叠加层"></canvas><div id="dragSelection" class="drag-selection"></div><div id="previewVisibility" class="preview-visibility"><table class="visibility-table"><thead><tr><th></th><th title="选择">➤</th><th title="显示">◉</th><th title="名称">◆</th></tr></thead><tbody><tr><td>骨骼</td><td><button class="vis-switch on" data-vis="selectBones" title="选择全部骨骼"></button></td><td><button class="vis-switch on" data-vis="bones" title="显示骨骼"></button></td><td><button class="vis-switch" data-vis="boneNames" title="显示骨骼名称"></button></td></tr><tr><td>图片</td><td><button class="vis-switch" disabled></button></td><td><button class="vis-switch on" data-vis="images" title="显示贴图"></button></td><td><button class="vis-switch" disabled></button></td></tr><tr><td>其他</td><td><button class="vis-switch" disabled></button></td><td><button class="vis-switch on" data-vis="other" title="显示其他附件"></button></td><td><button class="vis-switch" disabled></button></td></tr></tbody></table></div><button id="visibilityToggle" class="visibility-toggle" aria-label="显示控制">▦</button></div><div id="previewResizer" class="preview-resizer" title="拖动调整预览与物理约束比例"></div>
+   <div class="preview-stage"><div class="preview-input-hint" id="boneSelectionHelp" aria-label="骨骼选择说明"><span>左键选骨骼 · 点击空白取消</span><span>Ctrl + 左键点击：增选 / 减选</span><span>右键拖动：框选</span><span>Ctrl + 左键拖动：实时框选 · 优先增选</span></div><canvas id="rigGL" aria-label="Spine 官方运行时预览"></canvas><canvas id="rigCanvas" aria-label="Spine 骨骼叠加层"></canvas><div id="dragSelection" class="drag-selection"></div><div id="previewVisibility" class="preview-visibility"><table class="visibility-table"><thead><tr><th></th><th title="选择">➤</th><th title="显示">◉</th><th title="名称">◆</th></tr></thead><tbody><tr><td>骨骼</td><td><button class="vis-switch on" data-vis="selectBones" title="选择全部骨骼"></button></td><td><button class="vis-switch on" data-vis="bones" title="显示骨骼"></button></td><td><button class="vis-switch" data-vis="boneNames" title="显示骨骼名称"></button></td></tr><tr><td>图片</td><td><button class="vis-switch" disabled></button></td><td><button class="vis-switch on" data-vis="images" title="显示贴图"></button></td><td><button class="vis-switch" disabled></button></td></tr><tr><td>其他</td><td><button class="vis-switch" disabled></button></td><td><button class="vis-switch on" data-vis="other" title="显示其他附件"></button></td><td><button class="vis-switch" disabled></button></td></tr></tbody></table></div><button id="visibilityToggle" class="visibility-toggle" aria-label="显示控制">▦</button></div><div id="previewResizer" class="preview-resizer" title="拖动调整预览与物理约束比例"></div>
 
    <div class="preview-footer"><span id="previewStats">未载入角色</span><span>点击骨骼可选中</span></div>
   </section>
@@ -44,7 +44,7 @@
       <div class="scale-mode-row"><label>体积</label><select class="control" id="scaleYMode"><option value="none">无</option><option value="uniform">统一</option><option value="volume">体积</option></select></div>
       <div class="group-title">物理属性</div><div class="field-grid" id="physicsFields"></div>
 
-      <div class="actions"><button class="primary" id="applyNow" disabled>应用物理参数</button><button id="updateConstraint" disabled>更新载入的约束</button><button id="savePreset">保存预设</button><button id="saveAsPreset">另存为新预设</button><span class="action-note" id="editorHint">先载入 Spine JSON</span></div>
+      <div class="actions"><button id="updateConstraint" disabled>更新载入的约束</button><button id="savePreset">保存预设</button><button id="saveAsPreset">另存为新预设</button></div>
      </div>
     </div>
    </div>
@@ -66,6 +66,7 @@
 <script src="usage-guide.js"></script>
 <script src="default-presets.js"></script>
 <script src="shortcuts.js"></script>
+<script src="bone-icons.js"></script>
 <script src="app.js"></script>
 <script src="desktop.js"></script>
 </body>

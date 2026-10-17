@@ -44,7 +44,7 @@ async function main() {
   assert.equal(await page.locator('.appbar, .project-status, .heading').count(), 0);
   assert.equal(await page.locator('.preview-toolbar, #renderMode, #pickAssets, #assetInput, #physicsLive, #runtimeStatus').count(), 0);
   assert.equal(await page.locator('#dropbox strong').textContent(), '拖入 Spine 文件');
-  assert.equal(await page.locator('#applyNow').textContent(), '应用物理参数');
+  assert.equal(await page.locator('#applyNow').count(), 0);
   assert.deepEqual(await page.locator('.workspace-file-actions button').allTextContents(), ['导入预设库', '导出预设库', '快捷键设置', '使用说明', '保存原 JSON', '另存为 JSON']);
   assert.equal(await page.locator('.workspace-file-actions #exportJson').isDisabled(), true);
   await page.locator('#helpBtn').click();
@@ -218,7 +218,7 @@ async function main() {
     assert.equal(await page.locator('#f_mix').inputValue(), '0');
     await page.locator('#f_mix').fill('180');
     await page.locator('#constraintName').fill('desktop_roundtrip');
-    await page.locator('#applyNow').click();
+    await page.locator('#f_mix').dispatchEvent('change');
     const dest = path.join(output, `export-4${minor}.json`);
     await app.evaluate(({ dialog }, destination) => {
       dialog.showSaveDialog = async (_window, options) => {

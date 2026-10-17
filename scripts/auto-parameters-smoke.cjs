@@ -1,0 +1,30 @@
+'use strict';
+const fs=require('node:fs'),path=require('node:path'),assert=require('node:assert/strict'),{pathToFileURL}=require('node:url');
+const {chromium}=require('playwright-core');
+const root=path.resolve(__dirname,'..');
+(async()=>{const executablePath=process.env.CHROME_PATH||'C:/Program Files/Google/Chrome/Application/chrome.exe';const browser=await chromium.launch({executablePath,headless:true,args:['--use-gl=angle','--use-angle=swiftshader','--enable-unsafe-swiftshader']});try{
+const page=await browser.newPage(),errors=[];page.on('pageerror',e=>errors.push(e.message));await page.goto(pathToFileURL(path.join(root,'src/renderer/index.html')).href);await page.waitForFunction(()=>window.__spineTool);
+const fixture=JSON.parse(fs.readFileSync(path.join(root,'tests/fixtures/demo-43.json'),'utf8'));
+await page.evaluate(async fixture=>{window.__writes=[];window.desktop={saveProject:async request=>{window.__writes.push(JSON.parse(request.text));return {backup:'test-backup'}}};window.__spineTool.loadSkeleton(fixture,'test.json',{id:'test-source'});},fixture);
+await page.waitForFunction(()=>window.__spineTool.runtime.active,{},{timeout:30000});
+const pick=async names=>page.evaluate(names=>{document.querySelector('#clearSelection').click();for(const name of names){const row=[...document.querySelectorAll('[data-tree-name]')].find(r=>r.dataset.treeName===name);if(!row)throw Error('Missing bone '+name);row.dispatchEvent(new MouseEvent('click',{bubbles:true,ctrlKey:true}));}},names);
+await page.locator('#expandBones').click();
+const boneNames=fixture.bones.filter(b=>b.name!=='root').slice(0,2).map(b=>b.name);
+await pick(boneNames);await page.locator('#f_strength').fill('69');await page.locator('#f_strength').dispatchEvent('change');
+await page.waitForFunction(names=>{const d=window.__spineTool.getData();return names.every(name=>d.constraints.some(c=>c.type==='physics'&&c.bone===name&&c.strength===69));},boneNames);
+assert.equal(await page.locator('#applyNow').count(),0);
+const before=await page.evaluate(()=>structuredClone(window.__spineTool.getData()));
+await page.locator('#f_rotate').fill('28');await page.locator('#f_rotate').dispatchEvent('change');
+await page.waitForFunction(names=>names.every(name=>window.__spineTool.getData().constraints.find(c=>c.type==='physics'&&c.bone===name).rotate===.28),boneNames);
+const after=await page.evaluate(()=>window.__spineTool.getData());
+for(const name of boneNames){const a=after.constraints.find(c=>c.type==='physics'&&c.bone===name),b=before.constraints.find(c=>c.type==='physics'&&c.bone===name);assert.deepEqual({...a,rotate:b.rotate},b,'only changed field applied');assert.equal(after.constraints.filter(c=>c.type==='physics'&&c.bone===name).length,1,'no duplicate constraint');}
+await page.waitForFunction(()=>{const s=window.__spineTool.getSaveState();return s.saved===s.revision&&!s.saving&&window.__writes.length>0});
+await page.evaluate(()=>document.activeElement?.blur());await page.locator('#undoProject').click();assert.deepEqual(await page.evaluate(()=>window.__spineTool.getData()),before,'undo restores the previous parameter transaction');
+const unchanged=await page.evaluate(()=>JSON.stringify(window.__spineTool.getData()));await page.locator('#clearSelection').click();await page.locator('#f_strength').fill('77');await page.locator('#f_strength').dispatchEvent('change');await page.waitForTimeout(180);assert.equal(await page.evaluate(()=>JSON.stringify(window.__spineTool.getData())),unchanged,'unselected form editing does not touch project');
+await page.evaluate(()=>window.__spineTool.setForm({strength:12}));assert.equal(await page.evaluate(()=>JSON.stringify(window.__spineTool.getData())),unchanged,'programmatic form population does not auto-apply');
+await pick(['body']);await page.locator('#f_wind').evaluate(el=>{el.value='17';el.dispatchEvent(new Event('input',{bubbles:true}))});await pick(['head']);const switched=await page.evaluate(()=>window.__spineTool.getData());assert.equal(switched.constraints.find(c=>c.type==='physics'&&c.bone==='body').wind,17,'pending edit flushed to original bone');assert.notEqual(switched.constraints.find(c=>c.type==='physics'&&c.bone==='head').wind,17,'newly selected bone untouched');
+await page.locator('#scaleYMode').selectOption('volume');await page.waitForFunction(()=>window.__spineTool.getData().constraints.find(c=>c.bone==='head'&&c.type==='physics').scaleY==='volume');await page.locator('#f_strength').fill('62');await page.locator('#f_strength').dispatchEvent('change');assert.equal(await page.evaluate(()=>window.__spineTool.getData().constraints.find(c=>c.bone==='head'&&c.type==='physics').scaleY),'volume','editing strength preserves volume mode');
+await page.locator('#f_strength').fill('');await page.locator('#f_strength').dispatchEvent('change');await page.waitForTimeout(150);assert.equal(await page.evaluate(()=>window.__spineTool.getData().constraints.find(c=>c.bone==='head'&&c.type==='physics').strength),62,'transient blank input must not overwrite saved strength with zero');
+const fixture42=JSON.parse(fs.readFileSync(path.join(root,'tests/fixtures/demo-42.json'),'utf8'));await page.evaluate(fixture=>window.__spineTool.loadSkeleton(fixture,'test42.json'),fixture42);await page.waitForFunction(()=>window.__spineTool.runtime.active);await page.locator('#expandBones').click();await pick(['body','head']);await page.locator('#f_strength').fill('43');await page.locator('#f_strength').dispatchEvent('change');assert.equal(await page.evaluate(()=>window.__spineTool.getData().physics.filter(c=>c.strength===43).length),2,'Spine 4.2 creates and updates constraints');
+assert.deepEqual(errors,[]);console.log('Auto-apply browser smoke passed: create/update, multi-select, partial fields, no duplicates, autosave, undo, no selection, programmatic form, removed button');
+}finally{await browser.close();}})().catch(e=>{console.error(e);process.exitCode=1});

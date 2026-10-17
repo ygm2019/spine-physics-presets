@@ -1,5 +1,11 @@
 # Spine Physics Presets: Codex Handoff
 
+## Current: 2026-10-17, version 1.4.0
+
+The GitHub repository is now the maintenance source. See CHANGELOG.md for all changes since 1.3.1, including earlier local selection, rendering and preset improvements plus parameter auto-apply. Parameter edits patch only changed fields and retain transactional runtime validation, history and autosave. The apply button is removed; Ctrl+Enter flushes pending edits. Use npm run test:auto-parameters for browser regression (Chrome or CHROME_PATH required). Historical source/install paths and draft-only parameter behavior below are superseded. No new NSIS installer is published in this update.
+
+Local progress and installed app.asar continue to be saved under E:\agent\spine物理预设软件 and mirrored to the user-designated NAS project directory. These machine-specific copies are not the repository publication artifacts.
+
 ## Current release: 2026-10-10, version 1.3.1
 
 User explicitly authorized repackaging after the inheritance alignment fix. The inheritance row now uses 8px horizontal padding, matching the parameter-label text. The packaged EXE verified identical text-left positions at 1440px and 1060px window widths. Syntax checks, all 82 unit tests and packaged desktop smoke passed. Desktop default presets were synced again. Installer: C:\Users\22386\Documents\Codex\2026-10-08\1\outputs\Spine-Physics-Presets-Setup-1.3.1.exe. This release supersedes the 1.3.0 package below. No installation performed.

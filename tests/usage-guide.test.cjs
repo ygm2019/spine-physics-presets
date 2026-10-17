@@ -18,7 +18,7 @@ test('help documents every bound workflow key with input and list scopes', () =>
   assert.match(rows.get('Ctrl+Shift+A'), /清除/);
   assert.match(rows.get('Ctrl+I'), /反选/);
   for (const key of ['Ctrl+C', 'Ctrl+V', 'Delete', 'Shift+F10 / 菜单键']) assert.match(rows.get(key), /约束列表获得焦点/);
-  assert.match(rows.get('Ctrl+Shift+S'), /不提交输入框草稿.*不切换/);
+  assert.match(rows.get('Ctrl+Shift+S'), /先应用.*待处理参数.*不切换/);
   assert.match(rows.get('Ctrl+Z'), /输入框.*文本/);
 });
 test('help documents preview, tree, constraints, presets, sliders and layout gestures', () => {
