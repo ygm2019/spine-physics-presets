@@ -90,11 +90,11 @@ async function main() {
     assert.notEqual(await input.inputValue(), '', 'Native text selection requires a nonempty input');
     await input.focus();
     await page.keyboard.press('Control+a');
-    assert.deepEqual(await selected(), tail);
-    assert.equal(await input.evaluate(el => el.selectionStart === 0 && el.selectionEnd === el.value.length), true);
+    assert.deepEqual(await selected(), whole);
+    assert.equal(await input.evaluate(el => el.selectionStart === 0 && el.selectionEnd === el.value.length), false);
     await input.evaluate(el => el.blur());
     await page.keyboard.press('Control+a');
-    assert.deepEqual(await selected(), whole, 'Text Ctrl+A does not advance project selection');
+    assert.deepEqual(await selected(), peers, 'Input Ctrl+A advances the same bone-selection cycle');
     await page.keyboard.press('Control+Shift+a');
     assert.deepEqual(await selected(), []);
     await page.keyboard.press('Control+a');
@@ -105,7 +105,7 @@ async function main() {
     assert.deepEqual(await snapshot(), before);
     assert.equal(await page.locator('#activityLog li').count(), 0);
     assert.equal(await fs.readFile(file, 'utf8'), original);
-    report.checks.push(`4.${minor} multi-chain completion, native input Ctrl+A, manual reset and empty-selection all preserve JSON, save revision, history and activity log`);
+    report.checks.push(`4.${minor} multi-chain completion, bone-selection Ctrl+A from an input, manual reset and empty-selection all preserve JSON, save revision, history and activity log`);
   }
   assert.deepEqual(report.errors, []);
   report.passed = true;

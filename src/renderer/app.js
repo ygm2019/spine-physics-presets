@@ -525,6 +525,13 @@ function bindWorkflowKeys(){
   const matches=id=>window.shortcutSettings.matches(id,e),input=e.target.closest('input,textarea,select,[contenteditable]:not([contenteditable="false"])');
   if(matches('apply')&&!e.repeat){e.preventDefault();flushPhysicsEdits();return}
   if(matches('saveAs')){if(selection.drag||document.querySelector('.reordering'))return;e.preventDefault();if(!e.repeat)exportJson();return}
+  if(matches('selectCycle')){
+   // Bone selection owns this shortcut even while a parameter/name field has focus.
+   e.preventDefault();if(!data||e.repeat||selection.drag||document.querySelector('.reordering'))return;
+   if(e.shiftKey){setSelection([]);toast('已清除骨骼选择。',false,false);return}
+   const result=selectionCycle.next(treeRows(),selection.names,selection.anchor);setSelection(result.names,result.anchor,false,true);
+   toast(['','已选择当前骨骼及后代。','已选择整串骨骼。','已选择同级骨骼串。','已选择全部骨骼。'][result.stage],false,false);return;
+  }
   if(input)return;
   if(selection.drag||document.querySelector('.reordering'))return;
   if(matches('undo')){e.preventDefault();if(!e.repeat)restoreProject('undo')}
@@ -532,12 +539,6 @@ function bindWorkflowKeys(){
   else if(matches('clear')||matches('clearAlt')){e.preventDefault();if(data)setSelection([])}
   else if(matches('sameColor')){e.preventDefault();if(data&&!e.repeat){const colors=new Set(selection.names.map(name=>boneDisplayColor(name).toLowerCase()));setSelection(treeRows().filter(b=>colors.has(boneDisplayColor(b.name).toLowerCase())).map(b=>b.name))}}
   else if(matches('play')){e.preventDefault();if(!e.repeat)toggleAnimation()}
-  else if(matches('selectCycle')){
-   e.preventDefault();if(!data||e.repeat)return;
-   if(e.shiftKey){setSelection([]);toast('已清除骨骼选择。',false,false);return}
-   const result=selectionCycle.next(treeRows(),selection.names,selection.anchor);setSelection(result.names,result.anchor,false,true);
-   toast(['','已选择当前骨骼及后代。','已选择整串骨骼。','已选择同级骨骼串。','已选择全部骨骼。'][result.stage],false,false);
-  }
   else if(matches('invert')){e.preventDefault();if(data&&!e.repeat)setSelection(treeRows().filter(b=>!selection.names.includes(b.name)).map(b=>b.name))}
 
   else if(matches('focus')){e.preventDefault();if(!e.repeat)focusSelection()}
