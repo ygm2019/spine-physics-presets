@@ -21,9 +21,9 @@
 
 ## 安装与更新
 
-下载 Windows x64 安装包运行即可，无需另装 Node.js 或浏览器。安装时自动定位已有的 `Spine.com`，找不到时可手动选择；升级默认沿用旧版目录并保留用户预设。
+下载 Windows x64 EXE 安装包运行即可，无需另装 Node.js 或浏览器。1.4.4 起使用 Inno Setup 打包。安装时自动定位已有的 `Spine.com`，找不到时可手动选择；升级默认沿用旧版目录并保留用户预设。
 
-软件启动后自动检查更新。有新版时，点击右下角提示下载，完成后点击重启安装；未保存的工程会阻止重启。1.4.2 之前的版本需先手动升级。当前安装包未签名。
+软件启动后自动检查更新。有新版时，点击右下角提示下载，完成后点击重启安装；未保存的工程会阻止重启。1.4.3 及更早版本需先手动运行新版安装包完成安装器迁移。当前安装包未签名。
 
 <details>
 <summary>开发与构建</summary>
@@ -33,7 +33,7 @@ npm ci
 npm start
 ```
 
-检查与测试：`npm run check`、`npm test`。构建 Windows 安装包：`npm run dist`，输出位于 `dist/`。
+检查与测试：`npm run check`、`npm test`。构建 Windows 安装包：先安装 [Inno Setup](https://jrsoftware.org/isdl.php)，必要时设置 `INNO_SETUP_ISCC` 为 `ISCC.exe` 的绝对路径，再执行 `npm run dist`，输出位于 `dist/`。构建先生成 Electron 程序目录，再用 `build/installer.iss` 生成 EXE 和更新校验元数据，不再生成 NSIS 安装器。
 
 桌面回归需要 Windows，二进制导入测试还需要官方 Spine CLI。更多实现与维护说明见 [HANDOFF-CODEX.md](HANDOFF-CODEX.md)。
 

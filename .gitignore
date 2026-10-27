@@ -6,6 +6,8 @@ dist/
 .binary-output*/
 .installer-test-output/
 .update-test-output/
+.constraint-audit-output/
+pnpm-lock.yaml
 work/
 HANDOFF-MESH-CODEX.md
 mesh-analysis/

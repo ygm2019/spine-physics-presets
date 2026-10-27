@@ -100,9 +100,16 @@ function renderBoneTree(revealSelection=false){const tree=$('#treeList');if(!tre
  const entries=orderedBoneNames();tree.innerHTML='<div class="tree-content">'+entries.map(({bone:b,depth})=>{const has=childrenOf(b.name).length>0,open=selection.open.has(b.name),sel=selected.has(b.name);return `<div class="tree-row ${sel?'multi-selected':''}" aria-selected="${sel}" style="padding-left:${5+depth*13}px" data-tree-name="${esc(b.name)}"><span class="twisty" data-toggle-tree="${esc(b.name)}">${has?(open?'▾':'▸'):'·'}</span><span class="kind">●</span><span class="tree-name" title="${esc(b.name)}">${esc(b.name)}</span><span class="tree-count">${has?descendantsOf(b.name).length:''}</span></div>`}).join('')+'</div>';const rows=[...tree.querySelectorAll('.tree-row')];rows.forEach(row=>row.addEventListener('click',e=>{const name=row.dataset.treeName;if(e.target.dataset.toggleTree===name&&childrenOf(name).length){selection.open.has(name)?selection.open.delete(name):selection.open.add(name);renderBoneTree();return}selectBonesByName(name,e.ctrlKey||e.metaKey)}));tree.scrollTop=top;tree.scrollLeft=left;
  if(revealSelection){const first=rows.find(row=>selected.has(row.dataset.treeName));if(first){const bounds=tree.getBoundingClientRect(),rowBounds=first.getBoundingClientRect(),twisty=first.querySelector('.twisty').getBoundingClientRect();tree.scrollTop+=rowBounds.top-bounds.top-tree.clientTop;tree.scrollLeft=Math.max(0,tree.scrollLeft+twisty.left-bounds.left-tree.clientLeft-8);}}
 }
-function setSelection(names,anchor=names[0]||null,keepConstraints=false,keepCycle=false){flushPhysicsEdits();if(!keepCycle)selectionCycle.reset();if(!keepConstraints){constraintSelection.names=[];constraintSelection.anchor=null;editingConstraint=null;customConstraintName=false;window.constraintUI.closeMenu()}selection.names=[...new Set(names)].filter(n=>data?.bones.some(b=>b.name===n));selection.anchor=selection.names.includes(anchor)?anchor:selection.names[selection.names.length-1]||null;const first=selection.names[0];if(first)$('#boneSelect').value=first;updateNameFromBone();renderBoneTree(true);refreshConstraints(!keepConstraints);updateSelectionUI();drawRig()}
+function setSelection(names,anchor=names[0]||null,keepConstraints=false,keepCycle=false){flushPhysicsEdits();if(!keepCycle)selectionCycle.reset();if(!keepConstraints){constraintSelection.names=[];constraintSelection.anchor=null;editingConstraint=null;customConstraintName=false;window.constraintUI.closeMenu()}selection.names=[...new Set(names)].filter(n=>data?.bones.some(b=>b.name===n));selection.anchor=selection.names.includes(anchor)?anchor:selection.names[selection.names.length-1]||null;const first=selection.names[0];if(first)$('#boneSelect').value=first;if(!keepConstraints)syncBoneParameters();updateNameFromBone();renderBoneTree(true);refreshConstraints(!keepConstraints);updateSelectionUI();drawRig()}
+function syncBoneParameters(){
+ const bone=selection.anchor,matches=allConstraints('physics').filter(c=>c.bone===bone);
+ const active=matches.length===1?matches[0]:null;
+ // Selecting a bone reads its own setup values; it must never apply the previous form.
+ setForm(active?model.parameters(active,versionMinor):defaultValues());
+ if(active&&selection.names.length===1){constraintSelection.names=[active.name];constraintSelection.anchor=active.name;editingConstraint=active.name;customConstraintName=true;$('#boneSelect').value=bone;$('#constraintName').value=active.name;}
+}
 function selectBonesByName(name,add=false){if(add){const next=selection.names.includes(name)?selection.names.filter(n=>n!==name):[...selection.names,name];setSelection(next,name)}else setSelection([name],name)}
-function updateSelectionUI(){const n=selection.names.length;$('#selectionCount').textContent=`${n} 已选`;$('#targetBoneLabel').textContent=n?selection.names.slice(0,2).join('、')+(n>2?'…':''):'未选择';$('#targetBoneCount').textContent=n>1?`共 ${n} 根` :'';$('#clearSelection').disabled=!data||!n;$('#boneSummary').textContent=n?`已选择 ${n} 根骨骼，可一次套用预设。`:'';$('#previewStats').textContent=data?`${data.bones.length} 根骨骼 · ${n} 已选`:'未载入角色';syncInheritance();renderSaveState()}
+function updateSelectionUI(){const n=selection.names.length;$('#selectionCount').textContent=`${n} 已选`;$('#targetBoneLabel').textContent=n?selection.names.slice(0,2).join('、')+(n>2?'…':''):'未选择';const matches=allConstraints('physics').filter(c=>c.bone===selection.anchor);$('#targetBoneCount').textContent=n>1?`共 ${n} 根 · 参数：${selection.anchor}`:n&&matches.length>1?'多个物理约束，请在列表选择':n&&!matches.length?'无物理约束 · 默认参数':'';$('#clearSelection').disabled=!data||!n;$('#boneSummary').textContent=n?`已选择 ${n} 根骨骼，可一次套用预设。`:'';$('#previewStats').textContent=data?`${data.bones.length} 根骨骼 · ${n} 已选`:'未载入角色';syncInheritance();renderSaveState()}
 function boneIndex(name){return data?.bones.findIndex(b=>b.name===name)??-1}
 function setupSelection(){selection.open=new Set(treeRows().filter(b=>!b.parent).map(b=>b.name));renderBoneTree();updateSelectionUI()}
 
@@ -256,12 +263,14 @@ function refreshConstraints(revealBones=false){
  if(revealBones){const first=el.querySelector('.bone-selected');if(first){const bounds=el.getBoundingClientRect(),row=first.getBoundingClientRect();el.scrollTop+=row.top-bounds.top-el.clientTop+row.height/2-el.clientHeight/2;}}
 }
 function syncConstraintSelection(active){
+ flushPhysicsEdits();active=active&&allConstraints('physics').find(c=>c.name===active.name);
  const list=allConstraints('physics'),selected=list.filter(c=>constraintSelection.names.includes(c.name));
  if(active){editingConstraint=active.name;$('#constraintName').value=active.name;customConstraintName=true;setForm({...model.parameters(active,versionMinor),noScale:['noScale','noScaleOrReflection'].includes(data.bones.find(b=>b.name===active.bone)?.inherit)});}
  else{editingConstraint=null;customConstraintName=false;}
  setSelection(selected.map(c=>c.bone),active?.bone,true);if(active)$('#boneSelect').value=active.bone;refreshConstraints();
 }
 $('#constraintList').addEventListener('click',e=>{
+ flushPhysicsEdits();
  const row=e.target.closest('[data-constraint-index]');if(!row){constraintSelection.names=[];syncConstraintSelection(null);return}
  const list=allConstraints('physics'),i=Number(row.dataset.constraintIndex),c=list[i],s=constraintSelection,add=e.ctrlKey||e.metaKey;
  if(e.shiftKey&&s.anchor!==null){const a=list.findIndex(c=>c.name===s.anchor),range=list.slice(Math.min(a<0?i:a,i),Math.max(a<0?i:a,i)+1).map(c=>c.name);s.names=add?[...new Set([...s.names,...range])]:range;}
@@ -428,7 +437,7 @@ async function handleFiles(files,source,approval){
  }catch(e){toast(e.message||'无法解析 JSON 文件',true)}
 }
 $('#dropbox').addEventListener('click',()=>$('#fileInput').click());$('#fileInput').addEventListener('change',e=>handleFiles(e.target.files));$('#dropbox').addEventListener('dragover',e=>{e.preventDefault();$('#dropbox').classList.add('drag')});$('#dropbox').addEventListener('dragleave',()=>$('#dropbox').classList.remove('drag'));$('#dropbox').addEventListener('drop',e=>{e.preventDefault();$('#dropbox').classList.remove('drag');handleFiles(e.dataTransfer.files)});
-$('#boneSelect').addEventListener('change',()=>{const n=$('#boneSelect').value;setSelection([n],n);editingConstraint=null;$('#updateConstraint').disabled=true;updateNameFromBone();refreshBones()});$('#constraintName').addEventListener('input',()=>customConstraintName=true);
+$('#boneSelect').addEventListener('change',()=>{const n=$('#boneSelect').value;setSelection([n],n);refreshBones()});$('#constraintName').addEventListener('input',()=>customConstraintName=true);
 $('#clearSelection').addEventListener('click',()=>setSelection([]));$('#expandBones').addEventListener('click',()=>{treeRows().forEach(b=>{if(childrenOf(b.name).length)selection.open.add(b.name)});renderBoneTree()});$('#collapseBones').addEventListener('click',()=>{selection.open=new Set();renderBoneTree()});
 const runProjectEdit=action=>{try{const result=action();if(result?.catch)result.catch(error=>toast('修改未应用：'+error.message,true));return result}catch(error){toast('修改未应用：'+error.message,true)}};
 bindParameterAutoApply();$('#updateConstraint').addEventListener('click',()=>runProjectEdit(updateLoadedConstraint));$('#loadConstraint').addEventListener('click',loadSelectedConstraint);$('#refreshData').addEventListener('click',()=>{refreshBones();refreshConstraints();toast('骨骼和约束列表已刷新。')});$('#constraintSelect').addEventListener('dblclick',loadSelectedConstraint);

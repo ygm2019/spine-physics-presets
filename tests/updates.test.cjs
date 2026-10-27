@@ -45,3 +45,27 @@ test('no available update clears an old notice', async () => {
   const s = setup(); await s.api.check(); s.updater.emit('update-not-available');
   assert.equal(s.api.snapshot().status, 'idle'); assert.equal(s.api.snapshot().version, '');
 });
+
+test('Inno installation receives only verified download paths and waits for saved work', async () => {
+  const s = setup(), installed = [], files = ['C:\\cache\\installer.exe'];
+  let saved = false;
+  const api = createUpdates(s.updater, () => {}, async () => saved, async paths => installed.push(paths));
+  s.updater.downloadUpdate = async () => { s.updater.emit('update-downloaded', { version: '1.4.4' }); return files; };
+  await api.check(); await api.activate(); await api.activate(); assert.deepEqual(installed, []);
+  saved = true; await api.activate(); assert.deepEqual(installed, [files]);
+  assert(!s.calls.some(call => Array.isArray(call)), 'does not use NSIS quitAndInstall');
+});
+
+test('Inno installer preserves paths with spaces and quits only after successful spawn', async () => {
+  const { launchInstaller } = require('../src/desktop/inno-update.cjs');
+  const file = 'C:\\verified cache\\installer.exe', directory = 'E:\\Creative Tools\\Physics';
+  let child, call;
+  const pending = launchInstaller([file], directory, (...args) => {
+    call = args; child = new EventEmitter(); child.unref = () => {}; return child;
+  });
+  assert.deepEqual(call[1], ['/SILENT', '/SUPPRESSMSGBOXES', '/NORESTART', '/SP-', '/DIR=' + directory]);
+  child.emit('spawn'); await pending;
+  await assert.rejects(launchInstaller(['relative.exe'], directory), /Missing verified/);
+  const failed = launchInstaller([file], directory, () => { const c = new EventEmitter(); process.nextTick(() => c.emit('error', Error('blocked'))); return c; });
+  await assert.rejects(failed, /blocked/);
+});

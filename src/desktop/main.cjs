@@ -85,7 +85,11 @@ function createWindow() {
     autoUpdater.installDirectory = path.dirname(app.getPath('exe'));
     updates = require('./updates.cjs').createUpdates(autoUpdater, state => {
       if (window && !window.isDestroyed()) window.webContents.send('updates:state', state);
-    }, async () => Boolean(await window.webContents.executeJavaScript('window.__spineTool.prepareUpdate()')));
+    }, async () => Boolean(await window.webContents.executeJavaScript('window.__spineTool.prepareUpdate()')),
+      require('../../package.json').distribution === 'inno' ? async files => {
+        await require('./inno-update.cjs').launchInstaller(files, path.dirname(app.getPath('exe')));
+        app.quit();
+      } : undefined);
     setTimeout(() => updates.check(), 2500).unref();
   });
 }

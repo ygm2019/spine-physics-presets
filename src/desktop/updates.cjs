@@ -1,8 +1,9 @@
 'use strict';
 // No renderer-provided URLs or executable paths are accepted by this controller.
-function createUpdates(updater, changed, prepareInstall = async () => true) {
+function createUpdates(updater, changed, prepareInstall = async () => true, installDownloaded) {
   let state = { status: 'idle', version: '', percent: 0, message: '' };
   let busy = false;
+  let downloadedFiles = [];
   const set = patch => { state = { ...state, ...patch }; changed({ ...state }); };
   updater.autoDownload = false;
   updater.autoInstallOnAppQuit = false;
@@ -33,11 +34,12 @@ function createUpdates(updater, changed, prepareInstall = async () => true) {
       if (state.status === 'downloaded') {
         if (await prepareInstall()) {
           set({ status: 'installing', message: '' });
-          updater.quitAndInstall(true, true);
+          if (installDownloaded) await installDownloaded(downloadedFiles);
+          else updater.quitAndInstall(true, true);
         }
       } else {
         set({ status: 'downloading', percent: 0, message: '' });
-        await updater.downloadUpdate();
+        downloadedFiles = await updater.downloadUpdate() || [];
       }
     } catch { failed(); }
     finally { busy = false; }
