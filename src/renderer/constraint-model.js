@@ -16,6 +16,13 @@
     return minor >= 3 ? result : result.sort((a, b) => (Number(a.constraint.order) || 0) - (Number(b.constraint.order) || 0));
   }
   function physics(root, minor) { return entries(root, minor).filter(e => e.kind === 'physics').map(e => e.constraint); }
+  function affectedBones(root, kind, constraint) {
+    if (kind === 'slider') {
+      const animation = root.animations?.[constraint.animation];
+      return animation && animation.bones && !Array.isArray(animation.bones) ? Object.keys(animation.bones) : [];
+    }
+    return kind === 'physics' ? [constraint.bone] : Array.isArray(constraint.bones) ? [...constraint.bones] : [];
+  }
   function reorder(root, minor, keys) {
     const all = entries(root, minor), byKey = new Map(all.map(e => [e.key, e]));
     if (keys.length !== all.length || new Set(keys).size !== keys.length || keys.some(k => !byKey.has(k))) throw Error('Invalid constraint permutation');
@@ -79,18 +86,54 @@
     for (const e of all) {
       if (!e.constraint || typeof e.constraint.name !== 'string' || !e.constraint.name || keys.has(e.key)) errors.push('约束名称为空或同类型重名。');
       keys.add(e.key);
-      if (!['ik', 'transform', 'path', 'physics'].includes(e.kind)) errors.push(`暂不支持「${e.constraint.name}」的 ${e.kind || '未知'} 约束自动排序。`);
+      if (!kinds.includes(e.kind) || (e.kind === 'slider' && minor < 3)) errors.push(`暂不支持「${e.constraint.name}」的 ${e.kind || '未知'} 约束自动排序。`);
     }
     if (errors.length) return fail();
-    const nodes = all.map(e => ({ ...e, writes: new Set(), reads: new Set() }));
+    const nodes = all.map(e => ({ ...e, writes: new Set(), reads: new Set(), writesSlots: new Set(), readsSlots: new Set(), writesParameters: new Set() }));
     const slots = new Map((root.slots || []).map(s => [s.name, s]));
     const addRead = (node, name, local = false) => {
       if (!bones.has(name)) { errors.push(`「${node.constraint.name}」引用了缺失骨骼：${name}。`); return; }
       for (const ancestor of local ? [name] : ancestors.get(name)) node.reads.add(ancestor);
     };
+    function sliderEffects(node) {
+      const c = node.constraint, animation = root.animations?.[c.animation];
+      if (typeof c.animation !== 'string' || !c.animation || !Object.hasOwn(root.animations || {}, c.animation) || !object(animation)) {
+        errors.push(`「${c.name}」引用了缺失动画：${c.animation || '（空）'}。`); return [];
+      }
+      if (c.bone) addRead(node, c.bone, !!c.local);
+      if (animation.bones !== undefined && !object(animation.bones)) {
+        errors.push(`「${c.name}」的动画骨骼轨道无效。`); return [];
+      }
+      const writeSlot = name => {
+        if (!slots.has(name)) errors.push(`「${c.name}」的动画引用了缺失插槽：${name}。`);
+        else node.writesSlots.add(name);
+      };
+      if (animation.slots !== undefined && !object(animation.slots)) errors.push(`「${c.name}」的动画插槽轨道无效。`);
+      else for (const [name, timelines] of Object.entries(animation.slots || {})) {
+        if (!object(timelines)) errors.push(`「${c.name}」的动画插槽轨道无效。`);
+        else if (timelines.attachment || timelines.visible) writeSlot(name);
+      }
+      if (animation.attachments !== undefined && !object(animation.attachments)) errors.push(`「${c.name}」的动画附件轨道无效。`);
+      else for (const skin of Object.values(animation.attachments || {})) {
+        if (!object(skin)) errors.push(`「${c.name}」的动画附件轨道无效。`);
+        else for (const name of Object.keys(skin)) writeSlot(name);
+      }
+      // Slider animations can key constraint parameters, including other sliders.
+      // Empty-name physics timelines address all physics constraints.
+      for (const kind of kinds) {
+        if (animation[kind] === undefined) continue;
+        if (!object(animation[kind])) { errors.push(`「${c.name}」的 ${kind} 动画轨道无效。`); continue; }
+        for (const name of Object.keys(animation[kind])) {
+          const targets = name === '' && kind === 'physics' ? all.filter(e => e.kind === kind) : all.filter(e => e.kind === kind && e.constraint.name === name);
+          if (!targets.length && !(name === '' && kind === 'physics')) errors.push(`「${c.name}」的动画引用了缺失 ${kind} 约束：${name}。`);
+          for (const entry of targets) node.writesParameters.add(entry.key);
+        }
+      }
+      return affectedBones(root, 'slider', c);
+    }
     for (const node of nodes) {
-      const c = node.constraint, targets = node.kind === 'physics' ? [c.bone] : c.bones;
-      if (!Array.isArray(targets) || !targets.length) { errors.push(`「${c.name}」没有受约束骨骼。`); continue; }
+      const c = node.constraint, targets = node.kind === 'slider' ? sliderEffects(node) : node.kind === 'physics' ? [c.bone] : c.bones;
+      if (!Array.isArray(targets) || (!targets.length && node.kind !== 'slider')) { errors.push(`「${c.name}」没有受约束骨骼。`); continue; }
       if (node.kind === 'ik' && (targets.length > 2 || new Set(targets).size !== targets.length)) {
         errors.push(`「${c.name}」的 IK 只能约束 1 或 2 根不同骨骼。`); continue;
       }
@@ -107,6 +150,7 @@
       if (node.kind === 'path') {
         const slotName = minor === 3 ? c.slot : c.target, slot = slots.get(slotName);
         if (!slot) { errors.push(`「${c.name}」引用了缺失插槽：${slotName}。`); continue; }
+        node.readsSlots.add(slotName);
         if (!bones.has(slot.bone)) { errors.push(`「${c.name}」引用了缺失骨骼：${slot.bone}。`); continue; }
         let foundPath = false;
         for (const skin of root.skins || []) for (const attachment of Object.values(skin.attachments?.[slotName] || {})) {
@@ -134,10 +178,19 @@
       }
     }
     if (errors.length) return fail();
-    const edges = nodes.map(() => new Set()), writers = new Map();
+    const edges = nodes.map(() => new Set()), writers = new Map(), sideEffectWriters = new Map();
     nodes.forEach((node, i) => { for (const name of node.writes) { if (!writers.has(name)) writers.set(name, []); writers.get(name).push(i); } });
     nodes.forEach((node, i) => {
       for (const name of node.reads) for (const producer of writers.get(name) || []) if (producer !== i) edges[producer].add(i);
+      for (const key of [...node.writesParameters].map(key => 'constraint:' + key).concat([...node.writesSlots].map(name => 'slot:' + name))) {
+        if (!sideEffectWriters.has(key)) sideEffectWriters.set(key, []);
+        sideEffectWriters.get(key).push(i);
+      }
+    });
+    nodes.forEach((node, i) => {
+      for (const key of ['constraint:' + node.key, ...[...node.readsSlots].map(name => 'slot:' + name)]) {
+        for (const producer of sideEffectWriters.get(key) || []) if (producer !== i) edges[producer].add(i);
+      }
     });
     for (const group of writers.values()) for (const i of group) for (const j of group) {
       if (nodes[i].kind !== 'physics' && nodes[j].kind === 'physics') edges[i].add(j);
@@ -152,7 +205,7 @@
       return false;
     }
     // Preserve overlapping writers unless a real dependency requires the opposite.
-    for (const group of writers.values()) for (let a = 0; a < group.length; a++) for (let b = a + 1; b < group.length; b++) {
+    for (const group of [...writers.values(), ...sideEffectWriters.values()]) for (let a = 0; a < group.length; a++) for (let b = a + 1; b < group.length; b++) {
       const i = group[a], j = group[b];
       if ((nodes[i].kind === 'physics') !== (nodes[j].kind === 'physics')) continue;
       if (!reaches(j, i)) edges[i].add(j);
@@ -236,5 +289,5 @@
     }
     normalizeOrder(root, minor);
   }
-  return { entries, physics, reorder, normalizeOrder, moveRelative, automaticOrder, autoSort, defaults, toDisplay, fromDisplay, scaleYMode, parameters, paste, removePhysics };
+  return { entries, physics, affectedBones, reorder, normalizeOrder, moveRelative, automaticOrder, autoSort, defaults, toDisplay, fromDisplay, scaleYMode, parameters, paste, removePhysics };
 });

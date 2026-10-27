@@ -1,6 +1,6 @@
 {
   "name": "spine-physics-presets",
-  "version": "1.4.2",
+  "version": "1.4.3",
   "private": true,
   "description": "Standalone Spine 4.2/4.3 physics constraint preset editor",
   "author": "Yugongmang",

@@ -102,7 +102,7 @@ for (const minor of [2, 3]) {
     expectFailure(rig(minor, [p('duplicate', 'a'), p('duplicate', 'b')]), minor, /重名/);
     expectFailure(rig(minor, [p('p', 'a')], { bones: [{ name: 'a', parent: 'b' }, { name: 'b', parent: 'a' }] }), minor, /层级存在循环/);
     expectFailure(rig(minor, [p('p', 'a')], { bones: [{ name: 'a', parent: 'missing' }] }), minor, /缺少父骨骼/);
-    expectFailure(rig(minor, [{ type: 'slider', name: 'slider', bone: 'source' }]), minor, /暂不支持/);
+    expectFailure(rig(minor, [{ type: minor === 2 ? 'slider' : 'future-constraint', name: 'unknown', bone: 'source' }]), minor, /暂不支持/);
   });
   test(`4.${minor} preserves parameters, unknown fields, skins and animations`, () => {
     const root = expectSort(minor, [p('child', 'b'), p('parent', 'a')], ['parent', 'child'], { skins: [{ name: 'skin', physics: ['child'], unknown: 7 }], animations: { idle: { physics: { child: { wind: [{ value: 4 }] } } } }, custom: [1, 2] });
