@@ -4,9 +4,10 @@
 <meta charset="utf-8">
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' blob: data:; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Spine Physics Presets</title>
+<title>spine物理预设-摇杆调节版</title>
 <link rel="stylesheet" href="app.css">
 <link rel="stylesheet" href="desktop.css">
+<link rel="stylesheet" href="joystick.css">
 </head>
 <body>
 <main class="app">
@@ -26,6 +27,7 @@
    <div class="footnote">JSON 工具不能读取 Spine 编辑器当前选区。修改成功后自动保存原 JSON，再回到 Spine 使用 Import Data。</div>
   </aside>
   <section class="card preview-panel">
+   <div class="preset-library preview-presets"><div class="section-title"><span>预设库</span><div class="preset-title-actions"><button class="bar-btn" id="importPresets">导入预设库</button><button class="bar-btn" id="exportPresets">导出预设库</button><button class="subtle" id="resetPresets" title="恢复软件默认预设，会覆盖当前预设库" aria-label="恢复默认预设">恢复默认预设</button></div></div><div class="caption">点击名称：载入并套用到已选骨骼</div><div class="preset-list" id="presetList"></div><div class="preset-note">预设保存在此浏览器本地。可导出 / 导入 JSON 预设文件。</div></div>
    <div class="preview-head"><strong>角色 / 骨骼预览</strong><span class="caption" id="previewHint">官方 Spine 运行时渲染 · 拖框选择 · Ctrl 点击增选/减选</span></div>
 
    <div class="preview-stage"><div class="preview-input-hint" id="boneSelectionHelp" aria-label="骨骼选择说明"><span>左键选骨骼 · 点击空白取消</span><span>Ctrl + 左键点击：增选 / 减选</span><span>右键拖动：框选</span><span>Ctrl + 左键拖动：实时框选 · 优先增选</span></div><canvas id="rigGL" aria-label="Spine 官方运行时预览"></canvas><canvas id="rigCanvas" aria-label="Spine 骨骼叠加层"></canvas><div id="dragSelection" class="drag-selection"></div><div id="previewVisibility" class="preview-visibility"><table class="visibility-table"><thead><tr><th></th><th title="选择">➤</th><th title="显示">◉</th><th title="名称">◆</th></tr></thead><tbody><tr><td>骨骼</td><td><button class="vis-switch on" data-vis="selectBones" title="选择全部骨骼"></button></td><td><button class="vis-switch on" data-vis="bones" title="显示骨骼"></button></td><td><button class="vis-switch" data-vis="boneNames" title="显示骨骼名称"></button></td></tr><tr><td>图片</td><td><button class="vis-switch" disabled></button></td><td><button class="vis-switch on" data-vis="images" title="显示贴图"></button></td><td><button class="vis-switch" disabled></button></td></tr><tr><td>其他</td><td><button class="vis-switch" disabled></button></td><td><button class="vis-switch on" data-vis="other" title="显示其他附件"></button></td><td><button class="vis-switch" disabled></button></td></tr></tbody></table></div><button id="visibilityToggle" class="visibility-toggle" aria-label="显示控制">▦</button></div><div id="previewResizer" class="preview-resizer" title="拖动调整预览与物理约束比例"></div>
@@ -36,9 +38,22 @@
    <div class="tabs"><button class="tab active" data-tab="physicsPanel">物理约束</button></div>
    <div class="card panel" id="physicsPanel">
     <div class="preset-layout">
-     <div class="preset-library"><div class="section-title">预设库 <button class="subtle" id="resetPresets" title="恢复初始预设">↺</button></div><div class="caption">点击名称：载入并套用到已选骨骼</div><div class="preset-list" id="presetList"></div><div class="preset-note">预设保存在此浏览器本地。可导出 / 导入 JSON 预设文件。</div></div>
+     <details class="joystick-panel" id="joystickPanel" open>
+       <summary>手感摇杆 <small>相对调节 · 实验版</small><button id="joystickDemo" type="button" title="打开内置演示，不写入角色原文件">载入演示</button></summary>
+       <div class="joystick-body">
+        <div id="joystickPad" class="joystick-pad" tabindex="0" role="group" aria-label="二维物理手感摇杆，左右调整轻重，上下调整弹性。方向键微调，Shift加速，Escape取消。">
+         <span class="joystick-axis top">弹跳</span><span class="joystick-axis bottom">黏滞</span><span class="joystick-axis left">硬</span><span class="joystick-axis right">软</span><span class="joystick-ring"></span><span id="joystickThumb" class="joystick-thumb"></span>
+        </div>
+        <div class="joystick-side"><label>灵敏度 <select id="joystickSensitivity" aria-label="摇杆灵敏度"><option value="0.5">精细</option><option value="1" selected>标准</option><option value="2">快速</option></select></label>
+         <div class="joystick-checks"><label><input id="joystickTranslate" type="checkbox">联动位移</label><label><input id="joystickRotate" type="checkbox">联动旋转</label><label><input id="joystickScale" type="checkbox">联动缩放</label></div>
+         <div id="joystickReadout" class="joystick-readout">当前位置为调节起点</div><div class="joystick-hint">拖动调节，松手保留<br>Esc 取消本次拖动</div>
+        </div>
+       </div><div id="joystickStatus" class="joystick-status" role="status" aria-live="polite">选择已有物理约束的骨骼，开始调节。</div>
+      </details>
+
      <div class="editor">
       <div class="editor-head"><h2 id="inspectorTitle">物理约束</h2><div class="constraint-name-wrap"><span class="caption">目标</span><input class="control" id="constraintName" value="physics_constraint" aria-label="约束目标名称"></div></div>
+
       <div class="group-title">装配</div><div class="target-strip"><span class="target-icon">×</span><span>选中骨骼</span><strong id="targetBoneLabel">未选择</strong><span class="caption" id="targetBoneCount"></span></div>
       <div class="inherit-row"><span>继承</span><label><input type="checkbox" id="inheritRotation" checked>旋转</label><label><input type="checkbox" id="inheritScale" checked>缩放</label></div><div class="group-title">移动 / 旋转 / 缩放</div><div class="field-grid" id="influenceFields"></div>
       <div class="scale-mode-row"><label>体积</label><select class="control" id="scaleYMode"><option value="none">无</option><option value="uniform">统一</option><option value="volume">体积</option></select></div>
@@ -54,7 +69,7 @@
     <button id="updateNotice" class="update-notice" type="button" hidden aria-live="polite"></button>
     <ol id="activityLog" class="activity-log" aria-label="操作记录"></ol>
    </section>
-   </div><div class="workspace-file-actions" role="toolbar" aria-label="预设库与工程文件操作"><button class="bar-btn" id="importPresets">导入预设库</button><button class="bar-btn" id="exportPresets">导出预设库</button><button class="bar-btn" id="shortcutSettings">快捷键设置</button><button class="bar-btn" id="helpBtn">使用说明</button><span id="saveStatus" class="save-status" role="status" aria-live="polite"></span><button class="bar-btn" id="saveOriginal" disabled>保存原 JSON</button><button class="bar-btn primary" id="exportJson" disabled>另存为 JSON</button></div>
+   </div><div class="workspace-file-actions" role="toolbar" aria-label="预设库与工程文件操作"><button class="bar-btn" id="shortcutSettings">快捷键设置</button><button class="bar-btn" id="helpBtn">使用说明</button><span id="saveStatus" class="save-status" role="status" aria-live="polite"></span></div>
   </section>
  </div>
 </main>
@@ -62,6 +77,8 @@
 <input class="hidden-input" type="file" id="presetFile" accept=".json,application/json">
 <script src="dialogs.js"></script>
 <script src="constraint-model.js"></script>
+<script src="joystick-model.js"></script>
+<script src="joystick-demo.js"></script>
 <script src="constraint-ui.js"></script>
 <script src="workflow-model.js"></script>
 <script src="usage-guide.js"></script>

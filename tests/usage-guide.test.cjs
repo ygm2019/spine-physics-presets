@@ -4,7 +4,7 @@ const assert = require('node:assert/strict');
 const guide = require('../src/renderer/usage-guide.js');
 
 test('help retains five workflow steps and imports into a new Spine project', () => {
-  assert.deepEqual(guide.map(section => section.title), ['使用流程', '快捷键', '鼠标操作', '保存与操作范围']);
+  assert.deepEqual(guide.map(section => section.title), ['使用流程', '快捷键', '鼠标操作', '相对手感摇杆（实验版）', '保存与操作范围']);
   assert.equal(guide[0].ordered, true);
   assert.equal(guide[0].items.length, 5);
   assert.equal(guide[0].items[0], 'Spine 中点击「导出 → JSON」，勾选「非必要的数据」「纹理图集的打包」。');
@@ -27,7 +27,7 @@ test('help documents preview, tree, constraints, presets, sliders and layout ges
   assert.match(rows.get('预览 / 左键点击骨骼'), /Shift.*单选/);
   assert.match(rows.get('约束列表 / 点击'), /Shift.*连续区间.*Ctrl\+Shift.*追加区间/);
   assert.match(rows.get('预览 / 右键拖动'), /替换.*Ctrl 或 Shift.*追加/);
-  assert.match(guide[3].items.join('\n'), /清空操作记录不会清空撤销历史/);
+  assert.match(guide.find(section=>section.title==='保存与操作范围').items.join('\n'), /清空操作记录不会清空撤销历史/);
   for (const section of guide) {
     assert(section.items || section.rows);
     for (const row of section.rows || []) assert.equal(row.length, section.columns.length);

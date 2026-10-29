@@ -14,6 +14,118 @@ const selection={names:[],anchor:null,open:new Set(),bones:[],pose:[],bounds:nul
 const viewState={s:1,cx:0,cy:0,ox:0,oy:0,initialized:false,pan:null};
 const visibility={open:true,selectBones:true,bones:true,boneNames:false,images:true,other:true};
 const projectHistory=window.workflowModel.createHistory(),selectionCycle=window.workflowModel.createSelectionCycle();
+let joystickGesture=null;
+function displayParameter(field,raw,shown=model.toDisplay(field.dataset.field,raw,Number(field.dataset.scale)||1)){
+ const text=String(Number(shown.toFixed(1)));field.value=text;
+ field.dataset.rawValue=String(raw);field.dataset.shownValue=text;
+ const range=$(`[data-range="${field.dataset.field}"]`);if(range)range.value=String(shown);
+}
+function joystickStatus(text,error=false){const el=$('#joystickStatus');el.textContent=text;el.classList.toggle('error',error)}
+function joystickValues(items){
+ const byName=new Map((runtime.skeleton?.physics||runtime.skeleton?.physicsConstraints||[]).map(c=>[c.data.name,c]));
+ for(const item of items){
+  const c=byName.get(item.name);if(!c)throw Error('预览中未找到物理约束：'+item.name);
+  const values=model.parameters(item,versionMinor);
+  for(const key of ['x','y','rotate','scaleX','inertia','strength','damping','mass']){
+   const name=key==='mass'?'massInverse':key,value=key==='mass'?1/values.mass:values[key];
+   if(!Number.isFinite(value))throw Error('无效的预览参数：'+key);
+   if(['x','y','rotate','scaleX'].includes(key)){c.data[key]=value;continue}
+   if(c.data.setupPose){c.data.setupPose[name]=value;c.pose[name]=value;c.appliedPose[name]=value;}
+   else{c.data[name]=value;c[name]=value;}
+  }
+ }
+}
+function joystickInspector(){
+ const active=activeConstraint(),matches=model.physics(data,versionMinor).filter(c=>c.bone===selection.anchor);
+ const c=active||matches.length===1&&matches[0];
+ if(c)setForm(model.parameters(c,versionMinor));
+}
+function joystickResetHandle(){
+ $('#joystickPad').classList.remove('dragging');document.body.classList.remove('joystick-active');
+ $('#joystickThumb').style.transform='translate(0px,0px)';$('#joystickReadout').textContent='松手保留 · 下一次从当前值继续';
+ for(const id of ['joystickSensitivity','joystickTranslate','joystickRotate','joystickScale'])$('#'+id).disabled=false;
+}
+function cancelJoystick(message='已取消本次拖动，参数恢复。'){
+ const g=joystickGesture;if(!g)return;
+ joystickGesture=null;
+ try{if(runtime.skeleton===g.skeleton)joystickValues(g.originals)}catch(error){toast('摇杆预览恢复失败：'+error.message,true)}
+ joystickResetHandle();joystickInspector();joystickStatus(message);return true;
+}
+function beginJoystick(){
+ if(joystickGesture)cancelJoystick();flushPhysicsEdits();
+ if(!data||!runtime.active||!runtime.skeleton){joystickStatus('先载入有效的 Spine 工程。',true);return false}
+ const result=window.joystickModel.targets(data,selection.names,constraintSelection.names,versionMinor);
+ const summary=`${result.chosen.length} 个约束`+(result.missing.length?` · 跳过 ${result.missing.length} 根无约束骨骼`:'')+(result.ambiguous.length?` · ${result.ambiguous.length} 根需明确选择约束`:'');
+ if(!result.chosen.length){joystickStatus(selection.names.length?summary:'先选择已有物理约束的骨骼。',true);return false}
+ joystickGesture={root:data,before:JSON.stringify(data),skeleton:runtime.skeleton,
+  originals:clone(result.chosen),patches:clone(result.chosen),summary,dx:0,dy:0,
+  sensitivity:Number($('#joystickSensitivity').value),
+  travelX:Math.max(320,(window.screen.availWidth||window.innerWidth)/2),travelY:Math.max(240,(window.screen.availHeight||window.innerHeight)/2),
+  links:{translate:$('#joystickTranslate').checked,rotate:$('#joystickRotate').checked,scale:$('#joystickScale').checked},
+  context:{names:[...selection.names],anchor:selection.anchor,constraints:[...constraintSelection.names],active:editingConstraint}};
+ for(const id of ['joystickSensitivity','joystickTranslate','joystickRotate','joystickScale'])$('#'+id).disabled=true;
+ document.body.classList.add('joystick-active');$('#joystickPad').classList.add('dragging');joystickStatus(summary+' · 拖动预览，尚未保存');return true;
+}
+function previewJoystick(dx,dy){
+ const g=joystickGesture;if(!g)return;
+ try{
+  if(g.root!==data||g.skeleton!==runtime.skeleton)throw Error('工程或预览已改变');
+  g.patches=g.originals.map(c=>window.joystickModel.transform(c,{dx,dy,sensitivity:g.sensitivity,travelX:g.travelX,travelY:g.travelY,links:g.links,minor:versionMinor}));
+  g.dx=dx;g.dy=dy;joystickValues(g.patches);
+  const pad=$('#joystickPad'),x=Math.max(-pad.clientWidth/2+30,Math.min(pad.clientWidth/2-30,dx)),y=Math.max(-pad.clientHeight/2+30,Math.min(pad.clientHeight/2-30,dy));
+  $('#joystickThumb').style.transform=`translate(${x}px,${y}px)`;
+  $('#joystickReadout').textContent=`${dx>=0?'软':'硬'} ${Math.abs(Math.round(dx))} px · ${dy>=0?'黏滞':'弹跳'} ${Math.abs(Math.round(dy))} px`;
+  const shown=g.patches.find(c=>c.name===editingConstraint)||g.patches.find(c=>c.bone===selection.anchor)||g.patches[0];
+  const values=model.parameters(shown,versionMinor);
+  for(const key of ['inertia','strength','mass','damping',...(g.links.translate?['x','y']:[]),...(g.links.rotate?['rotate']:[]),...(g.links.scale?['scaleX']:[])]){
+   const field=$(`[data-field="${key}"]`),range=$(`[data-range="${key}"]`);if(!field)continue;
+   displayParameter(field,values[key]);
+  }
+ }catch(error){cancelJoystick('预览未应用：'+error.message);}
+}
+function finishJoystick(){
+ const g=joystickGesture;if(!g)return;
+ try{
+  if(data!==g.root||JSON.stringify(data)!==g.before||runtime.skeleton!==g.skeleton)throw Error('工程已改变，本次拖动未提交');
+  const draft=clone(data),patches=new Map(g.patches.map(c=>[c.name,c]));
+  for(const c of model.physics(draft,versionMinor)){const patch=patches.get(c.name);if(patch)Object.assign(c,patch)}
+  const after=JSON.stringify(draft);
+  if(after!==g.before){
+   // Validate the final document using a separate skeleton. Keep the live
+   // simulation, animation time, textures and camera intact while committing.
+   const sp=runtime.spine,parsed=new sp.SkeletonJson(new sp.AtlasAttachmentLoader(runtime.atlas)).readSkeletonData(draft),verified=new sp.Skeleton(parsed);
+   verified.updateWorldTransform(sp.Physics.reset);
+   data=draft;joystickGesture=null;
+   const label=`摇杆调节：${g.patches.length} 个物理约束`;
+   projectHistory.record(g.before,after,label,g.context);selectionCycle.reset();renderHistory();projectChanged();addActivity(label);
+  }else joystickGesture=null;
+  joystickResetHandle();joystickInspector();joystickStatus(g.summary+(after===g.before?' · 参数未改变':' · 已保留，可一次撤销'));
+ }catch(error){cancelJoystick('调节未提交：'+error.message);}
+}
+function bindJoystick(){
+ const pad=$('#joystickPad');let pointer=null;
+ $('#joystickDemo').addEventListener('click',async e=>{
+  e.preventDefault();e.stopPropagation();const button=e.currentTarget;if(button.disabled)return;button.disabled=true;
+  try{const approval=await prepareProjectImport();if(!approval)return;const demo=await window.joystickDemo.createFiles();await handleFiles(demo.files,null,approval);setSelection(demo.names,demo.names[0]);joystickStatus('演示已载入 · 已选择五节链，拖动试试；无物理约束的组会跳过。');}
+  catch(error){joystickStatus('演示未载入：'+error.message,true);}finally{button.disabled=false;}
+ });
+ pad.addEventListener('pointerdown',e=>{
+  if(e.button!==0||pointer)return;e.preventDefault();pad.focus({preventScroll:true});
+  if(!beginJoystick())return;pointer={id:e.pointerId,x:e.clientX,y:e.clientY};pad.setPointerCapture(e.pointerId);
+ });
+ pad.addEventListener('pointermove',e=>{if(pointer&&e.pointerId===pointer.id&&joystickGesture)previewJoystick(e.clientX-pointer.x,e.clientY-pointer.y)});
+ pad.addEventListener('pointerup',e=>{if(!pointer||e.pointerId!==pointer.id)return;pointer=null;finishJoystick();if(pad.hasPointerCapture(e.pointerId))pad.releasePointerCapture(e.pointerId)});
+ for(const type of ['pointercancel','lostpointercapture'])pad.addEventListener(type,()=>{if(pointer){pointer=null;cancelJoystick()}});
+ window.addEventListener('blur',()=>{pointer=null;cancelJoystick('窗口失焦，本次拖动已取消。')});
+ document.addEventListener('keydown',e=>{
+  if(joystickGesture){if(e.key==='Escape'){e.preventDefault();pointer=null;cancelJoystick();}else if(!['Shift','Control','Alt'].includes(e.key)){e.preventDefault();e.stopImmediatePropagation();}return}
+  if(e.target!==pad||!['ArrowLeft','ArrowRight','ArrowUp','ArrowDown'].includes(e.key)||document.querySelector('dialog[open]'))return;
+  e.preventDefault();e.stopImmediatePropagation();if(e.repeat)return;
+  if(beginJoystick()){const n=e.shiftKey?30:8;previewJoystick(e.key==='ArrowLeft'?-n:e.key==='ArrowRight'?n:0,e.key==='ArrowUp'?-n:e.key==='ArrowDown'?n:0);finishJoystick()}
+ },true);
+ document.addEventListener('pointerdown',e=>{if(joystickGesture&&!pad.contains(e.target)){pointer=null;cancelJoystick('开始其他操作，本次拖动已取消。')}},true);
+ $('#joystickPanel').addEventListener('toggle',()=>{if(!$('#joystickPanel').open){pointer=null;cancelJoystick()}});
+}
 function renderHistory(){const s=projectHistory.state();for(const [id,count,label,key] of [['undoProject',s.undo,s.undoLabel,'Ctrl+Z'],['redoProject',s.redo,s.redoLabel,'Ctrl+Y / Ctrl+Shift+Z']]){const button=$('#'+id);button.disabled=!count;button.title=(id==='undoProject'?'撤销':'重做')+(label?'：'+label:'')+'（'+key+'）'}}
 function scrollToLatestActivity(){const list=$('#activityLog');list.scrollTop=list.scrollHeight;requestAnimationFrame(()=>{list.scrollTop=list.scrollHeight})}
 function addActivity(message,error=false){
@@ -24,11 +136,11 @@ function addActivity(message,error=false){
 }
 let projectSave={source:null,revision:0,saved:0,saving:false,error:'',backup:null,text:''};
 function renderSaveState(){
- const state=projectSave,el=$('#saveStatus'),button=$('#saveOriginal');if(!el)return;
+ const state=projectSave,el=$('#saveStatus');if(!el)return;
  const dirty=state.revision!==state.saved;
  el.textContent=!data?'':!state.source?'未绑定原文件':state.saving?'保存中…':state.error?'未保存':dirty?'待保存':state.revision?'已自动保存':'已载入原 JSON';
  el.classList.toggle('save-error',!!state.error);el.title=state.error||[state.source?.path,state.backup?'备份：'+state.backup:''].filter(Boolean).join('\n');
- button.disabled=!state.source||state.saving;button.textContent=state.error?'重试保存':'保存原 JSON';
+ if(state.error)el.title+='\n按 Ctrl+S 重试保存，或 Ctrl+Shift+S 另存为。';
  $('#activitySelection').textContent=data?selection.names.length+' 根已选 · '+el.textContent:'未载入角色';
 }
 function bindProjectSource(source){projectSave={source:source||null,revision:0,saved:0,saving:false,error:'',backup:null,text:JSON.stringify(data,null,2)};projectHistory.clear();selectionCycle.reset();renderHistory();renderSaveState()}
@@ -51,12 +163,14 @@ async function saveOriginal(){
  })();return state.task;
 }
 async function prepareUpdate(){
+ cancelJoystick();
  flushPhysicsEdits();
  if(projectSave.source)await saveOriginal();
  if(projectSave.saving||projectSave.error||projectSave.saved!==projectSave.revision){toast('请先保存当前工程，再重启更新。',true);return false}
  return true;
 }
 async function prepareProjectImport(){
+ cancelJoystick();
  flushPhysicsEdits();
  while(true){
   // Let a just-committed edit start its queued save before deciding to discard.
@@ -71,7 +185,7 @@ async function prepareProjectImport(){
   return {state,revision};
  }
 }
-window.addEventListener('beforeunload',event=>{flushPhysicsEdits();if(projectSave.source&&(projectSave.saving||projectSave.saved!==projectSave.revision)){event.preventDefault();event.returnValue=''}});
+window.addEventListener('beforeunload',event=>{cancelJoystick();flushPhysicsEdits();if(projectSave.source&&(projectSave.saving||projectSave.saved!==projectSave.revision)){event.preventDefault();event.returnValue=''}});
 function validatePresets(items){
  if(!Array.isArray(items))throw Error('预设库必须是数组。');
  const names=new Set(),object=value=>!!value&&typeof value==='object'&&!Array.isArray(value);
@@ -100,7 +214,7 @@ function renderBoneTree(revealSelection=false){const tree=$('#treeList');if(!tre
  const entries=orderedBoneNames();tree.innerHTML='<div class="tree-content">'+entries.map(({bone:b,depth})=>{const has=childrenOf(b.name).length>0,open=selection.open.has(b.name),sel=selected.has(b.name);return `<div class="tree-row ${sel?'multi-selected':''}" aria-selected="${sel}" style="padding-left:${5+depth*13}px" data-tree-name="${esc(b.name)}"><span class="twisty" data-toggle-tree="${esc(b.name)}">${has?(open?'▾':'▸'):'·'}</span><span class="kind">●</span><span class="tree-name" title="${esc(b.name)}">${esc(b.name)}</span><span class="tree-count">${has?descendantsOf(b.name).length:''}</span></div>`}).join('')+'</div>';const rows=[...tree.querySelectorAll('.tree-row')];rows.forEach(row=>row.addEventListener('click',e=>{const name=row.dataset.treeName;if(e.target.dataset.toggleTree===name&&childrenOf(name).length){selection.open.has(name)?selection.open.delete(name):selection.open.add(name);renderBoneTree();return}selectBonesByName(name,e.ctrlKey||e.metaKey)}));tree.scrollTop=top;tree.scrollLeft=left;
  if(revealSelection){const first=rows.find(row=>selected.has(row.dataset.treeName));if(first){const bounds=tree.getBoundingClientRect(),rowBounds=first.getBoundingClientRect(),twisty=first.querySelector('.twisty').getBoundingClientRect();tree.scrollTop+=rowBounds.top-bounds.top-tree.clientTop;tree.scrollLeft=Math.max(0,tree.scrollLeft+twisty.left-bounds.left-tree.clientLeft-8);}}
 }
-function setSelection(names,anchor=names[0]||null,keepConstraints=false,keepCycle=false){flushPhysicsEdits();if(!keepCycle)selectionCycle.reset();if(!keepConstraints){constraintSelection.names=[];constraintSelection.anchor=null;editingConstraint=null;customConstraintName=false;window.constraintUI.closeMenu()}selection.names=[...new Set(names)].filter(n=>data?.bones.some(b=>b.name===n));selection.anchor=selection.names.includes(anchor)?anchor:selection.names[selection.names.length-1]||null;const first=selection.names[0];if(first)$('#boneSelect').value=first;if(!keepConstraints)syncBoneParameters();updateNameFromBone();renderBoneTree(true);refreshConstraints(!keepConstraints);updateSelectionUI();drawRig()}
+function setSelection(names,anchor=names[0]||null,keepConstraints=false,keepCycle=false){cancelJoystick();flushPhysicsEdits();if(!keepCycle)selectionCycle.reset();if(!keepConstraints){constraintSelection.names=[];constraintSelection.anchor=null;editingConstraint=null;customConstraintName=false;window.constraintUI.closeMenu()}selection.names=[...new Set(names)].filter(n=>data?.bones.some(b=>b.name===n));selection.anchor=selection.names.includes(anchor)?anchor:selection.names[selection.names.length-1]||null;const first=selection.names[0];if(first)$('#boneSelect').value=first;if(!keepConstraints)syncBoneParameters();updateNameFromBone();renderBoneTree(true);refreshConstraints(!keepConstraints);updateSelectionUI();drawRig()}
 function syncBoneParameters(){
  const bone=selection.anchor,matches=allConstraints('physics').filter(c=>c.bone===bone);
  const active=matches.length===1?matches[0]:null;
@@ -168,6 +282,7 @@ function overflowRangeKey(key){return ['inertia','strength','mass','wind','gravi
 function displayRange(key){if(key==='limit')return{min:0,max:5000,step:1};if(key==='fps')return{min:1,max:120,step:1};if(key==='strength')return{min:0,max:100,step:1};if(key==='wind'||key==='gravity')return{min:-100,max:100,step:1};if(key==='mass')return{min:1,max:1000,step:1};return{min:0,max:100,step:1}}
 let pendingPhysicsEdit=null,physicsEditTimer=null;
 function queuePhysicsParameter(key){
+ cancelJoystick();
  if(!data||!selection.names.length||!runtime.active)return;
  const targets=[...selection.names];if(pendingPhysicsEdit&&(pendingPhysicsEdit.root!==data||JSON.stringify(pendingPhysicsEdit.targets)!==JSON.stringify(targets)))flushPhysicsEdits();
  if(!pendingPhysicsEdit)pendingPhysicsEdit={root:data,targets,constraints:[...constraintSelection.names],keys:new Set(),values:null};
@@ -207,7 +322,7 @@ function fillFields(){
    if(group==='influence'&&key==='y')return '';
    return `<div class="field"><label for="f_${key}">${label}</label><input id="f_${key}" type="number" step="${step}" min="${b.min}" max="${b.max}" value="0" data-field="${key}" data-scale="${scale||1}"><input type="range" min="${b.min}" max="${b.max}" step="${step}" value="0" data-range="${key}" aria-label="${label}滑块"></div>`
  }).join('');
-   el.querySelectorAll('[data-field]').forEach(inp=>{const key=inp.dataset.field,range=el.querySelector(`[data-range="${key}"]`),extended=overflowRangeKey(key);if(extended)inp.removeAttribute('max');if(key==='wind'||key==='gravity')inp.removeAttribute('min');const sync=()=>{if(!inp.value.trim()||!Number.isFinite(Number(inp.value)))return;let n=Number(inp.value);const min=inp.hasAttribute('min')?Number(inp.min):-Infinity,max=Number(range.max);if(!Number.isFinite(n))n=0;n=extended?Math.max(min,n):Math.min(max,Math.max(min,n));inp.value=String(n);range.value=String(n);queuePhysicsParameter(key)};inp.addEventListener('input',sync);range.addEventListener('input',()=>{inp.value=range.value;sync()});if(extended){let drag=null;const scrub=e=>{const rect=range.getBoundingClientRect(),unit=(Number(range.max)-Number(range.min))/Math.max(1,rect.width-6),step=Number(range.step)||1;inp.value=String(Math.round((Number(range.min)+(e.clientX-rect.left-3)*unit)/step)*step);sync()};range.addEventListener('pointerdown',e=>{if(e.button!==0)return;e.preventDefault();drag={id:e.pointerId};range.setPointerCapture(e.pointerId);scrub(e)});range.addEventListener('pointermove',e=>{if(!drag||e.pointerId!==drag.id||!(e.buttons&1))return;e.preventDefault();scrub(e)});range.addEventListener('pointerup',()=>drag=null);range.addEventListener('pointercancel',()=>drag=null)}});
+   el.querySelectorAll('[data-field]').forEach(inp=>{const key=inp.dataset.field,range=el.querySelector(`[data-range="${key}"]`),extended=overflowRangeKey(key);if(extended)inp.removeAttribute('max');if(key==='wind'||key==='gravity')inp.removeAttribute('min');const sync=()=>{if(!inp.value.trim()||!Number.isFinite(Number(inp.value)))return;let n=Number(inp.value);const min=inp.hasAttribute('min')?Number(inp.min):-Infinity,max=Number(range.max);if(!Number.isFinite(n))n=0;n=extended?Math.max(min,n):Math.min(max,Math.max(min,n));inp.value=String(n);range.value=String(n);delete inp.dataset.rawValue;delete inp.dataset.shownValue;queuePhysicsParameter(key)};inp.addEventListener('input',sync);inp.addEventListener('change',()=>{if(inp.value.trim()&&Number.isFinite(Number(inp.value)))displayParameter(inp,model.fromDisplay(key,Number(inp.value),Number(inp.dataset.scale)||1))});range.addEventListener('input',()=>{inp.value=range.value;sync()});if(extended){let drag=null;const scrub=e=>{const rect=range.getBoundingClientRect(),unit=(Number(range.max)-Number(range.min))/Math.max(1,rect.width-6),step=Number(range.step)||1;inp.value=String(Math.round((Number(range.min)+(e.clientX-rect.left-3)*unit)/step)*step);sync()};range.addEventListener('pointerdown',e=>{if(e.button!==0)return;e.preventDefault();drag={id:e.pointerId};range.setPointerCapture(e.pointerId);scrub(e)});range.addEventListener('pointermove',e=>{if(!drag||e.pointerId!==drag.id||!(e.buttons&1))return;e.preventDefault();scrub(e)});range.addEventListener('pointerup',()=>drag=null);range.addEventListener('pointercancel',()=>drag=null)}});
  };
  render(influenceDefs,'#influenceFields','influence');render(physicsDefs,'#physicsFields','physics');
  const globals=$('#globalFields');if(globals)globals.innerHTML=globalDefs.map(([k,l])=>`<label class="checkrow"><input type="checkbox" data-global="${k}">${l} Global</label>`).join('');
@@ -215,8 +330,8 @@ function fillFields(){
 }
 // Preserve supplied Global flags even when the inspector has no controls for them.
 let formGlobals={};
-function valuesFromForm(){const o={...formGlobals};$$('[data-field]').forEach(i=>{const sc=Number(i.dataset.scale)||1;o[i.dataset.field]=model.fromDisplay(i.dataset.field,Number(i.value)||0,sc)});$$('[data-global]').forEach(i=>o[i.dataset.global]=i.checked);o.noScale=!$('#inheritScale').checked;o.scaleY=$('#scaleYMode').value;return o}
-function setForm(v={}){flushPhysicsEdits();formGlobals={};globalDefs.forEach(([key])=>{if(Object.hasOwn(v,key))formGlobals[key]=!!v[key]});const defaults=defaultValues();$$('[data-field]').forEach(i=>{const sc=Number(i.dataset.scale)||1;const value=Number(v[i.dataset.field]??defaults[i.dataset.field]??0),display=model.toDisplay(i.dataset.field,Number.isFinite(value)?value:0,sc);const min=i.hasAttribute('min')?Number(i.min):-Infinity,max=Number(i.max);const disp=overflowRangeKey(i.dataset.field)?Math.max(min,display):Math.min(max,Math.max(min,display));i.value=String(Number(disp.toPrecision(12)));const r=$(`[data-range="${i.dataset.field}"]`);if(r)r.value=String(disp)});$$('[data-global]').forEach(i=>i.checked=!!v[i.dataset.global]);$('#inheritScale').checked=!v.noScale;$('#scaleYMode').value=model.scaleYMode(v)}
+function valuesFromForm(){const o={...formGlobals};$$('[data-field]').forEach(i=>{const sc=Number(i.dataset.scale)||1;o[i.dataset.field]=i.value===i.dataset.shownValue&&Number.isFinite(Number(i.dataset.rawValue))?Number(i.dataset.rawValue):model.fromDisplay(i.dataset.field,Number(i.value)||0,sc)});$$('[data-global]').forEach(i=>o[i.dataset.global]=i.checked);o.noScale=!$('#inheritScale').checked;o.scaleY=$('#scaleYMode').value;return o}
+function setForm(v={}){flushPhysicsEdits();formGlobals={};globalDefs.forEach(([key])=>{if(Object.hasOwn(v,key))formGlobals[key]=!!v[key]});const defaults=defaultValues();$$('[data-field]').forEach(i=>{const sc=Number(i.dataset.scale)||1;const value=Number(v[i.dataset.field]??defaults[i.dataset.field]??0),display=model.toDisplay(i.dataset.field,Number.isFinite(value)?value:0,sc);const min=i.hasAttribute('min')?Number(i.min):-Infinity,max=Number(i.max);const disp=overflowRangeKey(i.dataset.field)?Math.max(min,display):Math.min(max,Math.max(min,display));displayParameter(i,Number.isFinite(value)?value:0,disp)});$$('[data-global]').forEach(i=>i.checked=!!v[i.dataset.global]);$('#inheritScale').checked=!v.noScale;$('#scaleYMode').value=model.scaleYMode(v)}
 function defaultValues(){return model.defaults(versionMinor)}
 function renderPresets(){const box=$('#presetList'),scroll=box.scrollTop;box.innerHTML='';presets.forEach(p=>{const b=document.createElement('button');b.className='preset-btn'+(p.name===selectedPreset?' selected':'');b.dataset.presetName=p.name;b.innerHTML=`<i class="preset-dot"></i><span>${esc(p.name)}</span>`;b.title=p.name+' · 左键载入并应用 · 拖动排序 · 右键管理';b.addEventListener('click',()=>{selectedPreset=p.name;setForm(p.values||{});$('#constraintName').value=safeName($('#boneSelect').value)+'_'+p.name;customConstraintName=false;renderPresets();if(data)runProjectEdit(()=>applyPhysics(true));else toast('已载入参数。载入 Spine JSON 后再点击预设即可自动套用。')});box.appendChild(b)});if(!presets.length)box.innerHTML='<div class="empty-state">暂无预设。编辑参数后点击「另存为新预设」。</div>';box.scrollTop=scroll;}
 async function deletePreset(p){
@@ -245,7 +360,7 @@ window.constraintUI.bindReorder($('#presetList'),{
 function esc(s){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
 function determineVersion(root){const s=String(root?.skeleton?.spine||root?.skeleton?.version||'');const m=s.match(/^(\d+)\.(\d+)/);if(!m)throw Error('JSON 缺少 skeleton.spine 版本号，无法安全判断约束数据格式。');const major=+m[1],minor=+m[2];if(major<4||(major===4&&minor<2))throw Error(`检测到 Spine ${s}。物理约束 JSON 工作流需要 Spine 4.2 或 4.3。`);if(major>4||minor>3)throw Error(`检测到 Spine ${s}，当前仅按 Spine 4.2 / 4.3 格式写出，请先确认格式兼容。`);return minor}
 function ensureArrays(root,minor){if(!Array.isArray(root.bones)||!root.bones.length)throw Error('JSON 中没有 bones 骨骼数组。');root.slots ||= [];root.skins ||= [];if(minor>=3)root.constraints ||= [];else {root.ik ||= [];root.transform ||= [];root.path ||= [];root.physics ||= [];root.slider ||= []}}
-function loadSkeleton(root,name,source){playback.name='';playback.playing=false;playback.time=0;const minor=determineVersion(root);ensureArrays(root,minor);stopRuntime();versionMinor=minor;data=root;bindProjectSource(source);constraintSelection.names=[];constraintSelection.anchor=null;fileName=name||'skeleton.json';editingConstraint=null;customConstraintName=false;selection.names=[];selection.anchor=null;selection.bones=root.bones;$('#fileMeta').textContent=fileName;$('#fileMeta').title=source?.path||fileName;$('#boneSelect').disabled=false;$('#exportJson').disabled=false;$('#refreshData').disabled=false;$('#expandBones').disabled=false;$('#collapseBones').disabled=false;setupSelection();refreshBones();refreshConstraints();updateNameFromBone();drawRig();refreshRuntime();toast(`已读取 Spine ${data.skeleton?.spine||versionMinor} JSON。`)}
+function loadSkeleton(root,name,source){cancelJoystick();playback.name='';playback.playing=false;playback.time=0;const minor=determineVersion(root);ensureArrays(root,minor);stopRuntime();versionMinor=minor;data=root;bindProjectSource(source);constraintSelection.names=[];constraintSelection.anchor=null;fileName=name||'skeleton.json';editingConstraint=null;customConstraintName=false;selection.names=[];selection.anchor=null;selection.bones=root.bones;$('#fileMeta').textContent=fileName;$('#fileMeta').title=source?.path||fileName;$('#boneSelect').disabled=false;$('#refreshData').disabled=false;$('#expandBones').disabled=false;$('#collapseBones').disabled=false;setupSelection();refreshBones();refreshConstraints();updateNameFromBone();drawRig();refreshRuntime();toast(`已读取 Spine ${data.skeleton?.spine||versionMinor} JSON。`)}
 
 function refreshBones(){if(!data)return;const makeOptions=()=>data.bones.map(b=>{const parent=b.parent?` ← ${b.parent}`:'';return `<option value="${esc(b.name)}">${esc(b.name)}${esc(parent)}</option>`}).join('');const boneSelect=$('#boneSelect'),prev=boneSelect.value;boneSelect.innerHTML=makeOptions();if(data.bones.some(b=>b.name===prev))boneSelect.value=prev;renderBoneTree();updateBoneSummary();updateSelectionUI();drawRig()}
 function updateBoneSummary(){if(!data)return;const b=data.bones.find(x=>x.name===$('#boneSelect').value);if(!b){$('#boneSummary').textContent='';return}$('#boneSummary').textContent=`长度 ${Number(b.length||0).toFixed(2)} · 父级 ${b.parent||'（根骨骼）'} · 缩放继承 ${b.inherit||'normal'}`}
@@ -323,6 +438,7 @@ $('#constraintList').addEventListener('keydown',e=>{
  else if(e.key==='ContextMenu'||(e.shiftKey&&e.key==='F10')){e.preventDefault();const c=activeConstraint(),r=$('#constraintList').getBoundingClientRect();if(c)showConstraintMenu(c,r.left+20,r.top+20)}
 });
 function commitConstraintOrder(draft,label='修改物理约束',recordHistory=true){
+ cancelJoystick();
  const original=data;
  const before=JSON.stringify(original),after=JSON.stringify(draft),context={names:[...selection.names],anchor:selection.anchor,constraints:[...constraintSelection.names],active:editingConstraint};
  const committed=()=>{if(recordHistory&&projectHistory.record(before,after,label,context))addActivity(label);selectionCycle.reset();renderHistory();projectChanged()};
@@ -402,7 +518,7 @@ function updateLoadedConstraint(){
  if(!old||!draft.bones.some(b=>b.name===bone)){toast('约束或目标骨骼不存在。',true);return}
  if(old.bone!==bone&&model.physics(draft,versionMinor).some(c=>c!==old&&c.bone===bone)){toast('目标骨骼已有物理约束，不能再添加第二个。',true);return}
  const previous=clone(old),updated=savePhysics(draft,valuesFromForm(),old,versionMinor),labels=new Map([...influenceDefs,...physicsDefs].map(([key,label,,scale])=>[key,{label,scale}]));
- const changes=Object.keys(updated).filter(key=>{if(key.endsWith('Global')&&!Object.hasOwn(previous,key)&&updated[key]===false)return false;return JSON.stringify(previous[key])!==JSON.stringify(updated[key])}).map(key=>{const def=labels.get(key),display=value=>def&&Number.isFinite(value)?Number(model.toDisplay(key,value,def.scale).toPrecision(8)):String(value??'默认');return `${def?.label||key} ${display(previous[key])} → ${display(updated[key])}`});
+ const changes=Object.keys(updated).filter(key=>{if(key.endsWith('Global')&&!Object.hasOwn(previous,key)&&updated[key]===false)return false;return JSON.stringify(previous[key])!==JSON.stringify(updated[key])}).map(key=>{const def=labels.get(key),display=value=>def&&Number.isFinite(value)?Number(model.toDisplay(key,value,def.scale).toFixed(1)):String(value??'默认');return `${def?.label||key} ${display(previous[key])} → ${display(updated[key])}`});
  commitConstraintOrder(draft,`更新「${updated.name}」${changes.length?'：'+changes.join('，'):''}`);refreshBones();refreshConstraints();toast(`约束「${updated.name}」已更新。`,false,false);
 }
 function loadSelectedConstraint(){const c=activeConstraint()||selectedConstraints()[0];if(!c)return;syncConstraintSelection(c);toast(`已载入「${c.name}」参数。`)}
@@ -410,7 +526,7 @@ function updateNameFromBone(){if(!customConstraintName){const b=$('#boneSelect')
 async function savePreset(asNew){const v=valuesFromForm();let name;if(asNew){name=await window.appDialogs.prompt('新预设名称：',selectedPreset?selectedPreset+' 副本':'新预设');if(name===null)return;name=name.trim();if(!name){toast('预设名称不能为空。',true);return}if(presets.some(p=>p.name===name)){toast('该名称已存在，请换一个名称。',true);return}presets.push({name,values:v})}else{ name=selectedPreset||$('#constraintName').value.trim();if(!name){toast('请先选择预设，或使用「另存为新预设」。',true);return}const p=presets.find(x=>x.name===name);if(p)p.values=v;else presets.push({name,values:v})}selectedPreset=name;persistPresets();renderPresets();toast(`预设「${name}」已保存到本地软件。`)}
 function findSkin(root){if(!Array.isArray(root.skins))root.skins=[];let skin=root.skins.find(s=>s.name==='default');if(!skin){skin={name:'default',attachments:{}};root.skins.unshift(skin)}skin.attachments ||= {};return skin}
 async function download(name,text,mime){if(window.desktop){try{const result=await window.desktop.saveJson({suggestedName:name,text});if(!result.canceled)toast('已保存 JSON：'+result.path);return !result.canceled}catch(e){toast('保存失败：'+e.message,true);return false}}const blob=new Blob([text],{type:mime}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(url),1500);return true}
-async function exportJson(){flushPhysicsEdits();if(!data)return;const text=JSON.stringify(data,null,2),base=(fileName||'skeleton.json').replace(/\.json$/i,'')+'_with_physics.json';if(window.desktop)return download(base,text,'application/json');if(window.showSaveFilePicker){try{const h=await window.showSaveFilePicker({suggestedName:base,types:[{description:'Spine JSON',accept:{'application/json':['.json']}}]});const w=await h.createWritable();await w.write(text);await w.close();toast('已保存修改后的 Spine JSON。');return}catch(e){if(e.name==='AbortError')return}}download(base,text,'application/json');toast('已下载修改后的 Spine JSON。')}
+async function exportJson(){cancelJoystick();flushPhysicsEdits();if(!data)return;const text=JSON.stringify(data,null,2),base=(fileName||'skeleton.json').replace(/\.json$/i,'')+'_with_physics.json';if(window.desktop)return download(base,text,'application/json');if(window.showSaveFilePicker){try{const h=await window.showSaveFilePicker({suggestedName:base,types:[{description:'Spine JSON',accept:{'application/json':['.json']}}]});const w=await h.createWritable();await w.write(text);await w.close();toast('已保存修改后的 Spine JSON。');return}catch(e){if(e.name==='AbortError')return}}download(base,text,'application/json');toast('已下载修改后的 Spine JSON。')}
 function exportPresetFile(){download('spine-physics-presets.json',JSON.stringify({format:'spine-physics-presets',version:1,presets},null,2),'application/json')}
 function importPresetFile(file){const r=new FileReader();r.onload=()=>{try{const v=JSON.parse(r.result),p=validatePresets(Array.isArray(v)?v:v?.presets);const map=new Map(presets.map(x=>[x.name,x]));p.forEach(x=>map.set(x.name,x));presets=[...map.values()];persistPresets();renderPresets();toast(`导入完成，当前共 ${presets.length} 个预设。`)}catch(e){toast('预设库未导入：'+e.message,true)}};r.readAsText(file,'utf-8')}
 function importCurrentPreset(){const p=presets.find(x=>x.name===selectedPreset);if(!p)return;setForm(p.values||{})}
@@ -442,9 +558,9 @@ $('#clearSelection').addEventListener('click',()=>setSelection([]));$('#expandBo
 const runProjectEdit=action=>{try{const result=action();if(result?.catch)result.catch(error=>toast('修改未应用：'+error.message,true));return result}catch(error){toast('修改未应用：'+error.message,true)}};
 bindParameterAutoApply();$('#updateConstraint').addEventListener('click',()=>runProjectEdit(updateLoadedConstraint));$('#loadConstraint').addEventListener('click',loadSelectedConstraint);$('#refreshData').addEventListener('click',()=>{refreshBones();refreshConstraints();toast('骨骼和约束列表已刷新。')});$('#constraintSelect').addEventListener('dblclick',loadSelectedConstraint);
 $('#deleteConstraint').addEventListener('click',()=>runProjectEdit(deleteConstraints));$('#sortConstraints').addEventListener('click',sortConstraints);
-$('#savePreset').addEventListener('click',()=>savePreset(false));$('#saveAsPreset').addEventListener('click',()=>savePreset(true));$('#resetPresets').addEventListener('click',async()=>{if(await window.appDialogs.confirm('恢复初始预设？这会覆盖本地预设库。')){presets=clone(initialPresets);selectedPreset='';persistPresets();renderPresets();toast('初始预设已恢复。')}});
-$('#exportJson').addEventListener('click',exportJson);$('#exportPresets').addEventListener('click',exportPresetFile);$('#importPresets').addEventListener('click',()=>$('#presetFile').click());$('#presetFile').addEventListener('change',e=>{if(e.target.files[0])importPresetFile(e.target.files[0]);e.target.value=''});$('#helpBtn').addEventListener('click',help);
-$('#saveOriginal').addEventListener('click',saveOriginal);
+$('#savePreset').addEventListener('click',()=>savePreset(false));$('#saveAsPreset').addEventListener('click',()=>savePreset(true));$('#resetPresets').addEventListener('click',async()=>{if(await window.appDialogs.confirm('恢复软件默认预设？这会覆盖当前预设库，包括你新增、修改或导入的预设；当前工程的物理参数不受影响。')){presets=clone(initialPresets);selectedPreset='';persistPresets();renderPresets();toast('默认预设已恢复。')}});
+$('#exportPresets').addEventListener('click',exportPresetFile);$('#importPresets').addEventListener('click',()=>$('#presetFile').click());$('#presetFile').addEventListener('change',e=>{if(e.target.files[0])importPresetFile(e.target.files[0]);e.target.value=''});$('#helpBtn').addEventListener('click',help);
+
 $('#undoProject').addEventListener('click',()=>restoreProject('undo'));$('#redoProject').addEventListener('click',()=>restoreProject('redo'));$('#clearActivity').addEventListener('click',()=>$('#activityLog').replaceChildren());
 $$( '.tab' ).forEach(b=>b.addEventListener('click',()=>{$$('.tab').forEach(x=>x.classList.toggle('active',x===b));$$('.panel').forEach(x=>x.classList.toggle('hidden',x.id!==b.dataset.tab))}));
 /* ---------- 官方 Spine 运行时预览（JSON + atlas + 纹理） ---------- */
@@ -464,7 +580,7 @@ function buildRuntimeSkeleton(preserveView=false){const sp=runtime.spine;if(!sp|
 function applyAttachmentVisibility(){const sk=runtime.skeleton;if(!sk)return;sk.slots.forEach(slot=>{const att=slot.attachment||slot.appliedPose?.attachment;if(!att)return;const type=att.constructor?.name||'';const isOther=/Clipping|BoundingBox|Point|Path/i.test(type);att.visible=visibility.images&&(!isOther||visibility.other)})}
 function renderRuntimeGL(){const sp=runtime.spine,sk=runtime.skeleton,r=runtime.renderer;if(!sp||!sk||!r)return;const stage=$('.preview-stage'),rect=stage.getBoundingClientRect(),dpr=window.devicePixelRatio||1;try{r.resize(sp.ResizeMode.Expand)}catch(e){}const bounds=skeletonBounds(sk);ensureView(bounds,rect.width,rect.height,dpr);runtime.view={...viewState,dpr};const v=runtime.view;const cam=r.camera;cam.setViewport(rect.width*dpr,rect.height*dpr);cam.position.set(v.cx,v.cy,0);cam.zoom=1/(v.s*dpr);cam.update();const gl=runtime.context.gl;gl.clearColor(0,0,0,0);gl.clear(gl.COLOR_BUFFER_BIT);r.begin();try{if(runtime.texturedPages>0){if(visibility.images)r.drawSkeleton(sk)}else if(visibility.other){const debug=r.skeletonDebugRenderer;debug.drawBones=false;debug.drawRegionAttachments=false;debug.drawMeshHull=false;debug.drawMeshTriangles=false;debug.drawBoundingBoxes=true;debug.drawPaths=true;debug.drawClipping=true;r.drawSkeletonDebug(sk)}}catch(e){runtime.error=e.message||String(e)}r.end()}
 function drawOverlay(){const c=$('#rigCanvas'),stage=$('.preview-stage');if(!c||!stage)return;const rect=stage.getBoundingClientRect(),dpr=window.devicePixelRatio||1;c.width=Math.max(1,rect.width*dpr);c.height=Math.max(1,rect.height*dpr);const ctx=c.getContext('2d');ctx.setTransform(dpr,0,0,dpr,0,0);ctx.clearRect(0,0,rect.width,rect.height);selection.pose=[];const sk=runtime.skeleton;if(!sk)return;const{s,ox,oy}=runtime.view,showNames=visibility.boneNames;sk.bones.forEach(b=>{const p=bonePose(b),name=b.data?.name||b.name,selected=selection.names.includes(name),len=Number(b.data?.length||0),bx=p.worldX,by=p.worldY,x=ox+bx*s,y=oy-by*s,ex=ox+(bx+p.a*len)*s,ey=oy-(by+p.c*len)*s;const iconBone=data.bones.find(bone=>bone.name===name)||{name},point=len===0;selection.pose.push({name,x,y,ex,ey,point,pointKind:point?(iconBone.icon||'crosshair'):null,pointExtent:point?((!iconBone.icon||iconBone.icon==='crosshair')?14:12)*boneIconScale(iconBone):0,pointPositiveExtent:point&&(!iconBone.icon||iconBone.icon==='crosshair')?21*boneIconScale(iconBone):0,iconAngle:(point&&(!iconBone.icon||iconBone.icon==='crosshair')?Math.atan2(-p.c,p.a):0)-(Number(iconBone.iconRotation)||0)*Math.PI/180});if(visibility.bones)drawSpineBone(ctx,data.bones.find(bone=>bone.name===name)||{name},x,y,ex,ey,selected,Math.atan2(-p.c,p.a));if(showNames){ctx.font='10px Segoe UI';ctx.fillStyle=selected?'#ffe27c':'#c2c3c5';ctx.fillText(name,ex+4,ey-4)}})}
-function runtimeFrame(ts){if(!runtime.active){runtime.raf=0;return}runtime.raf=requestAnimationFrame(runtimeFrame);const sp=runtime.spine,sk=runtime.skeleton;if(!sp||!sk)return;const now=ts||performance.now();let dt=(now-(runtime.last||now))/1000;runtime.last=now;dt=Math.max(0,Math.min(0.05,dt));if(playback.playing&&runtime.animationState){runtime.animationState.update(dt*playback.speed);runtime.animationState.apply(sk);updateAnimationProgress()}try{sk.update(playback.name&&!playback.playing?0:dt)}catch(e){}try{sk.updateWorldTransform(sp.Physics.update)}catch(e){sk.updateWorldTransform(sp.Physics.pose)}renderRuntimeGL();drawOverlay()}
+function runtimeFrame(ts){if(!runtime.active){runtime.raf=0;return}runtime.raf=requestAnimationFrame(runtimeFrame);const sp=runtime.spine,sk=runtime.skeleton;if(!sp||!sk)return;const now=ts||performance.now();let dt=(now-(runtime.last||now))/1000;runtime.last=now;dt=Math.max(0,Math.min(0.05,dt));if(playback.playing&&runtime.animationState){runtime.animationState.update(dt*playback.speed);runtime.animationState.apply(sk);updateAnimationProgress()}if(joystickGesture)joystickValues(joystickGesture.patches);try{sk.update(playback.name&&!playback.playing?0:dt)}catch(e){}try{sk.updateWorldTransform(sp.Physics.update)}catch(e){sk.updateWorldTransform(sp.Physics.pose)}renderRuntimeGL();drawOverlay()}
 function stopRuntime(){runtime.active=false;if(runtime.raf){cancelAnimationFrame(runtime.raf);runtime.raf=0}runtime.last=0}
 function runtimeSync(){
  if(!runtime.active)return;
@@ -545,9 +661,9 @@ function bindWorkflowKeys(){
 
  });
 }
-bindAnimationControls();bindSidebarResizers();bindVisibility();bindResizer();bindPreview();bindWorkflowKeys();window.addEventListener('resize',()=>{viewState.initialized=false;if(runtime.active)renderRuntimeGL();drawRig()});
+bindJoystick();bindAnimationControls();bindSidebarResizers();bindVisibility();bindResizer();bindPreview();bindWorkflowKeys();window.addEventListener('resize',()=>{viewState.initialized=false;if(runtime.active)renderRuntimeGL();drawRig()});
 renderHistory();if(!presetLoadError)toast('先载入 Spine JSON。',false,false);
-for(const [id,title] of [['clearSelection','清除骨骼选择（Ctrl+Shift+A）'],['exportJson','另存为 JSON（Ctrl+Shift+S）'],['updateConstraint','完整更新载入的约束']])$('#'+id).title=title;
+for(const [id,title] of [['clearSelection','清除骨骼选择（Ctrl+Shift+A）'],['updateConstraint','完整更新载入的约束']])$('#'+id).title=title;
 /* 调试/自动化校验入口（CDP 驱动用，不影响界面逻辑） */
-window.__spineTool={prepareUpdate,runtime,selection,getData:()=>data,refreshRuntime,drawRig,loadSkeleton,applyPhysics,valuesFromForm,setForm,toast,handleFiles,importPresetFile,exportJson,saveOriginal,prepareProjectImport,focusSelection,getHistoryState:()=>projectHistory.state(),getSaveState:()=>({source:projectSave.source,revision:projectSave.revision,saved:projectSave.saved,saving:projectSave.saving,error:projectSave.error,backup:projectSave.backup})};
+window.__spineTool={getJoystickState:()=>joystickGesture?{active:true,dx:joystickGesture.dx,dy:joystickGesture.dy,travelX:joystickGesture.travelX,travelY:joystickGesture.travelY,targets:joystickGesture.originals.map(c=>c.name)}:{active:false},prepareUpdate,runtime,selection,getData:()=>data,refreshRuntime,drawRig,loadSkeleton,applyPhysics,valuesFromForm,setForm,toast,handleFiles,importPresetFile,exportJson,saveOriginal,prepareProjectImport,focusSelection,getHistoryState:()=>projectHistory.state(),getSaveState:()=>({source:projectSave.source,revision:projectSave.revision,saved:projectSave.saved,saving:projectSave.saving,error:projectSave.error,backup:projectSave.backup})};
 })();

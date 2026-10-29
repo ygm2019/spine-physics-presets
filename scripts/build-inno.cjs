@@ -5,6 +5,7 @@ const crypto = require('node:crypto');
 const { spawnSync } = require('node:child_process');
 const root = path.resolve(__dirname, '..');
 const pkg = require('../package.json');
+if(pkg.experimental)throw Error('摇杆调节版当前仅提供开发启动入口。实验版安装器尚未配置，禁止复用稳定版安装流程。');
 function run(file, args, options = {}) {
   const result = spawnSync(file, args, { cwd: root, stdio: 'inherit', windowsHide: true, ...options });
   if (result.error) throw result.error;

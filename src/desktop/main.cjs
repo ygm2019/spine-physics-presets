@@ -13,13 +13,17 @@ let settingsFile;
 let settings = normalizeWindowSettings({});
 let updates;
 const projectFiles = new ProjectFiles();
+const identity = require('./experiment-identity.cjs');
+app.setName(identity.name);
 
-if (process.env.SPINE_PHYSICS_TEST_DATA) {
-  const directory = path.resolve(process.env.SPINE_PHYSICS_TEST_DATA);
+{
+  const directory = process.env.SPINE_PHYSICS_TEST_DATA
+    ? path.resolve(process.env.SPINE_PHYSICS_TEST_DATA)
+    : path.join(app.getPath('appData'), identity.profile);
   fs.mkdirSync(directory, { recursive: true });
   app.setPath('userData', directory);
 }
-app.setAppUserModelId('local.yugongmang.spinephysics');
+app.setAppUserModelId(identity.appId);
 
 function trusted(event) {
   if (!window || event.sender !== window.webContents || event.senderFrame !== window.webContents.mainFrame || event.senderFrame.url !== pageUrl) {
@@ -35,7 +39,7 @@ function createWindow() {
   nativeTheme.themeSource = 'dark';
   Menu.setApplicationMenu(null);
   window = new BrowserWindow({
-    title: 'Spine Physics Presets',
+    title: identity.name,
     width: settings.width,
     height: settings.height,
     minWidth: 1060,
@@ -80,7 +84,7 @@ function createWindow() {
   });
   window.loadFile(page);
   window.webContents.once('did-finish-load', () => {
-    if (!app.isPackaged || process.env.SPINE_PHYSICS_TEST === '1') return;
+    if (identity.experimental || !app.isPackaged || process.env.SPINE_PHYSICS_TEST === '1') return;
     const { autoUpdater } = require('electron-updater');
     autoUpdater.installDirectory = path.dirname(app.getPath('exe'));
     updates = require('./updates.cjs').createUpdates(autoUpdater, state => {

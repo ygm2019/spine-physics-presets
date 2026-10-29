@@ -1,0 +1,37 @@
+.joystick-panel{margin:9px;border:1px solid #5e626b;border-radius:7px;background:#303237;overflow:hidden}
+.joystick-panel summary{display:flex;gap:8px;align-items:center;padding:8px 10px;cursor:pointer;font-size:12px;font-weight:600;list-style:none;background:#363a42}
+.joystick-panel summary:before{content:'✥';color:#83d8e5;font-size:17px}.joystick-panel summary small{margin-left:auto;color:#bac4d4;font-size:10px;font-weight:400}
+.joystick-body{display:grid;grid-template-columns:minmax(170px,1fr) minmax(116px,.75fr);gap:10px;padding:10px}
+.joystick-pad{position:relative;height:186px;overflow:hidden;touch-action:none;user-select:none;cursor:grab;border-radius:6px;border:1px solid #646c7a;outline:none;background:radial-gradient(ellipse at 17% 20%,#4a567d55,transparent 65%),radial-gradient(ellipse at 85% 85%,#57847a44,transparent 65%),#252930}
+.joystick-pad:focus-visible{outline:2px solid #7dd9e8;outline-offset:2px}.joystick-pad.dragging{cursor:grabbing;border-color:#8fdae5;box-shadow:inset 0 0 28px #7dd9e815}
+.joystick-pad:before,.joystick-pad:after{content:'';position:absolute;pointer-events:none;background:#8592a433}.joystick-pad:before{width:1px;height:100%;left:50%}.joystick-pad:after{height:1px;width:100%;top:50%}
+.joystick-axis{position:absolute;color:#d5deea;font-size:11px;pointer-events:none}.joystick-axis.top{top:9px;left:50%;transform:translateX(-50%)}.joystick-axis.bottom{bottom:9px;left:50%;transform:translateX(-50%)}.joystick-axis.left{left:9px;top:50%;transform:translateY(-50%)}.joystick-axis.right{right:9px;top:50%;transform:translateY(-50%)}
+.joystick-ring{position:absolute;inset:33px 25px;border:1px dashed #8a9cb32b;border-radius:50%;pointer-events:none}
+.joystick-thumb{position:absolute;left:50%;top:50%;width:29px;height:29px;margin:-14.5px;border-radius:50%;pointer-events:none;border:1px solid #c0e7f0;background:radial-gradient(circle at 35% 28%,#e4f7f8,#89bfcc 40%,#518596);box-shadow:0 3px 9px #0008,0 0 13px #85d5e52b;transition:transform 150ms ease-out;z-index:1}
+.dragging .joystick-thumb{transition:none}.joystick-side{display:flex;flex-direction:column;gap:8px;min-width:0;font-size:11px}.joystick-side label{display:flex;align-items:center;gap:5px;white-space:nowrap}.joystick-side select{width:78px;min-width:0;font-size:11px;background:#282b31;color:#dce5ee;border:1px solid #666e7a;border-radius:3px;padding:3px}
+.joystick-checks{display:flex;flex-direction:column;gap:5px}.joystick-checks input{accent-color:#81cedc}.joystick-hint{font-size:10px;line-height:1.65;color:#aebaca}.joystick-status{border-top:1px solid #4e555f;padding:6px 9px;font-size:10px;line-height:1.5;color:#bfcbd8;min-height:29px}.joystick-status.error{color:#f3b5a3}
+.joystick-readout{font-variant-numeric:tabular-nums;color:#87dae8;line-height:1.6;min-height:33px;font-size:10px}
+body.joystick-active .layout{user-select:none}
+.joystick-panel summary button{padding:3px 7px;font-size:10px;border:1px solid #657e8e;border-radius:3px;background:#344e5c;color:#d6eef3;white-space:nowrap}
+@media(max-width:1180px){.joystick-body{grid-template-columns:minmax(145px,1fr) 111px;gap:8px;padding:8px}.joystick-pad{height:180px}}
+
+/* User layout: presets above the viewport; joystick in the library's former
+   inspector slot. The full original property editor remains immediately below. */
+.preview-panel>.preview-presets{flex:0 0 auto;min-height:0;max-height:132px;overflow:hidden;padding:4px 8px!important;border-bottom:1px solid #515357;background:#393c41}
+.preview-presets .section-title{font-size:11px;color:#d3dbe5}
+.preview-presets .section-title{display:flex;align-items:center;justify-content:space-between;gap:8px;min-height:24px}
+.preset-title-actions{display:flex;align-items:center;justify-content:flex-end;gap:5px;flex-shrink:0}
+.preset-title-actions .bar-btn{padding:2px 7px;font-size:10px;min-height:22px;border-radius:3px;white-space:nowrap}
+.preset-title-actions #resetPresets{margin:0;padding:1px 5px;min-height:22px}
+.preview-presets #presetList{max-height:96px;overflow-y:auto;margin:3px 0;gap:3px 5px}
+.preview-presets .preset-btn{padding:3px 7px!important;min-height:24px;font-size:10px;border:1px solid #52555d;background:#34363c}
+.preview-presets .preset-btn.selected{background:#62552f;border-color:#a48c44;color:#ffe8a8}
+#physicsPanel>.preset-layout>.joystick-panel{flex:0 0 auto;margin:5px 7px 7px}
+#physicsPanel>.preset-layout>.joystick-panel summary{padding:5px 9px;min-height:30px}
+#physicsPanel>.preset-layout>.joystick-panel .joystick-body{padding:7px 9px;gap:10px;grid-template-columns:minmax(140px,1fr) minmax(118px,.7fr)}
+#physicsPanel>.preset-layout>.joystick-panel .joystick-pad{height:142px}
+#physicsPanel>.preset-layout>.joystick-panel .joystick-side{gap:5px}
+#physicsPanel>.preset-layout>.joystick-panel .joystick-checks{gap:3px}
+#physicsPanel>.preset-layout>.joystick-panel .joystick-hint{font-size:9px;line-height:1.45}
+#physicsPanel>.preset-layout>.joystick-panel .joystick-readout{min-height:15px;font-size:9px;line-height:1.4}
+#physicsPanel>.preset-layout>.joystick-panel .joystick-status{padding:4px 9px;min-height:24px}
